@@ -4,30 +4,32 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch index.ts",
+    "dev": "bun --watch ./src/index.ts",
     "start": "bun index.ts",
     "build": "bun build index.ts --outdir ./dist",
     "typecheck": "tsc --noEmit",
-    "postinstall": "prisma skills sync || exit 0"
+    "postinstall": "prisma skills sync || exit 0",
+    "contract:emit": "prisma contract emit"
   },
   "devDependencies": {
+    "@prisma/cli-engine": "0.2.3",
     "@types/bun": "latest",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.4.0",
     "@types/pg": "^8.23.1",
-    "prisma": "^8.0.0-rc.12"
-  },
-  "peerDependencies": {
+    "prisma": "^8.0.0-rc.10",
     "typescript": "^5"
   },
   "dependencies": {
     "@prisma/client": "^7.10.0",
-    "@types/cors": "^2.8.19",
+    "@prisma/orm-postgres": "^8.0.0-rc.8",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.23.0",
     "zod": "^4.4.3"
   }
 }
