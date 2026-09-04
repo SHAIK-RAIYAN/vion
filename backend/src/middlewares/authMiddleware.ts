@@ -1,17 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
-import { asyncHandler } from "../shared/utils/asyncHandler";
+import { asyncHandler } from "../utils/asyncHandler";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/config";
-
-type decodeTokenSchema = {
-  id: string;
-  email: string;
-  gender: "MALE" | "FEMALE" | "OTHER";
-  firstName: string;
-  lastName: string;
-  dob: string;
-  createdAt: string;
-};
 
 export const authMiddleware = asyncHandler(
   (req: Request, res: Response, next: NextFunction) => {
@@ -24,9 +14,11 @@ export const authMiddleware = asyncHandler(
       throw new Error("Jwt secret is not defined.");
     }
 
-    const decodedUser = jwt.verify(token, JWT_SECRET) as decodeTokenSchema;
+    const decodedUser = jwt.verify(token, JWT_SECRET) as NonNullable<
+      Request["user"]
+    >;
 
-    (req as Request & { user: decodeTokenSchema }).user = decodedUser;
+    req.user = decodedUser;
 
     next();
   },

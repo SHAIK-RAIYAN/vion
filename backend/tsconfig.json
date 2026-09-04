@@ -30,6 +30,9 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+
+    // types
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   }
 }

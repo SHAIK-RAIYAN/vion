@@ -1,6 +1,6 @@
 import * as authservice from "./auth.service";
 import type { Request, Response } from "express";
-import { asyncHandler } from "../../shared/utils/asyncHandler";
+import { asyncHandler } from "../../utils/asyncHandler";
 import { NODE_ENV } from "../../config/config";
 
 const signUpUser = asyncHandler(async (req: Request, res: Response) => {
