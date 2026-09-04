@@ -22,4 +22,14 @@ const signInUser = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ message: "SignIn Successfull" });
 });
 
-export { signUpUser, signInUser };
+const signOutUser = asyncHandler((req: Request, res: Response) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  res.status(200).json({ message: "SignOut Successfull" });
+});
+
+export { signUpUser, signInUser, signOutUser };
