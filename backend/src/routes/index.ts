@@ -1,9 +1,9 @@
-import express from "express";
+import { Router } from "express";
 import authRouter from "../modules/auth/auth.routes";
 import userRouter from "../modules/user/user.routes";
 import { authMiddleware } from "../middlewares/authMiddleware";
 
-const router = express.Router();
+const router = Router();
 
 router.use("/auth", authRouter);
 
