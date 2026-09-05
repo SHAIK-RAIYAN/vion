@@ -6,7 +6,7 @@ model User {
   password  String
   firstName String
   lastName  String
-  gender    String?
+  gender    Gender
   dob       DateTime?
   createdAt DateTime  @default(now())
   updatedAt temporal.updatedAt()
@@ -16,6 +16,12 @@ model User {
   comments      Comment[]
   watchHistory  WatchHistory[]
   subscriptions Subscription[]
+}
+
+enum Gender{
+  MALE
+  FEMALE
+  OTHER
 }
 
 model Channel {

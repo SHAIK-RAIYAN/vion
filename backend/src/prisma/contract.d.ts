@@ -33,7 +33,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b163b538bd3f21bd27395032307c91212a318c2f7aeded559139c7bf511b189f'>;
+  StorageHashBase<'2a206879e2307f050fa1b5617d3aa00b165b6d3e3d6a4f0e5688ef085bb46b84'>;
 export type ExecutionHash =
   ExecutionHashBase<'685da8ddbdb7c9837dc2261f0489a2a2cf62f0aa56a599a4cbcffc897bba4ae5'>;
 export type ProfileHash =
@@ -293,7 +293,7 @@ export type FieldOutputTypes = {
       readonly password: CodecTypes['pg/text@1']['output'];
       readonly firstName: CodecTypes['pg/text@1']['output'];
       readonly lastName: CodecTypes['pg/text@1']['output'];
-      readonly gender: CodecTypes['pg/text@1']['output'] | null;
+      readonly gender: 'MALE' | 'FEMALE' | 'OTHER';
       readonly dob: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -368,7 +368,7 @@ export type FieldInputTypes = {
       readonly password: CodecTypes['pg/text@1']['input'];
       readonly firstName: CodecTypes['pg/text@1']['input'];
       readonly lastName: CodecTypes['pg/text@1']['input'];
-      readonly gender: CodecTypes['pg/text@1']['input'] | null;
+      readonly gender: 'MALE' | 'FEMALE' | 'OTHER';
       readonly dob: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -442,7 +442,7 @@ export type StorageColumnTypes = {
       readonly dob: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly email: CodecTypes['pg/text@1']['output'];
       readonly firstName: CodecTypes['pg/text@1']['output'];
-      readonly gender: CodecTypes['pg/text@1']['output'] | null;
+      readonly gender: 'MALE' | 'FEMALE' | 'OTHER';
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly lastName: CodecTypes['pg/text@1']['output'];
       readonly password: CodecTypes['pg/text@1']['output'];
@@ -517,7 +517,7 @@ export type StorageColumnInputTypes = {
       readonly dob: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly email: CodecTypes['pg/text@1']['input'];
       readonly firstName: CodecTypes['pg/text@1']['input'];
-      readonly gender: CodecTypes['pg/text@1']['input'] | null;
+      readonly gender: 'MALE' | 'FEMALE' | 'OTHER';
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly lastName: CodecTypes['pg/text@1']['input'];
       readonly password: CodecTypes['pg/text@1']['input'];
@@ -978,7 +978,7 @@ type ContractBase = Omit<
                 readonly gender: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
+                  readonly nullable: false;
                 };
                 readonly dob: {
                   readonly nativeType: 'timestamptz';
@@ -1134,6 +1134,10 @@ type ContractBase = Omit<
             };
           };
           readonly valueSet: {
+            readonly Gender: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['MALE', 'FEMALE', 'OTHER'];
+            };
             readonly InteractionType: {
               readonly kind: 'valueSet';
               readonly values: readonly ['LIKE', 'DISLIKE'];
@@ -1614,7 +1618,7 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly gender: {
-                readonly nullable: true;
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly dob: {
@@ -1824,6 +1828,14 @@ type ContractBase = Omit<
           };
         };
         readonly enum: {
+          readonly Gender: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'MALE'; readonly value: 'MALE' },
+              { readonly name: 'FEMALE'; readonly value: 'FEMALE' },
+              { readonly name: 'OTHER'; readonly value: 'OTHER' },
+            ];
+          };
           readonly Visibility: {
             readonly codecId: 'pg/text@1';
             readonly members: readonly [

@@ -41,6 +41,23 @@
     "namespaces": {
       "public": {
         "enum": {
+          "Gender": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "MALE",
+                "value": "MALE"
+              },
+              {
+                "name": "FEMALE",
+                "value": "FEMALE"
+              },
+              {
+                "name": "OTHER",
+                "value": "OTHER"
+              }
+            ]
+          },
           "InteractionType": {
             "codecId": "pg/text@1",
             "members": [
@@ -777,10 +794,16 @@
                 }
               },
               "gender": {
-                "nullable": true,
+                "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Gender",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "id": {
@@ -1633,6 +1656,13 @@
               "uniques": []
             },
             "user": {
+              "checks": [
+                {
+                  "expression": "\"gender\" IN ('MALE', 'FEMALE', 'OTHER')",
+                  "name": "user_gender_check_30490488",
+                  "prefix": "user_gender_check"
+                }
+              ],
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1661,7 +1691,13 @@
                 "gender": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
-                  "nullable": true
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Gender",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
                 },
                 "id": {
                   "codecId": "pg/text@1",
@@ -1870,6 +1906,14 @@
             }
           },
           "valueSet": {
+            "Gender": {
+              "kind": "valueSet",
+              "values": [
+                "MALE",
+                "FEMALE",
+                "OTHER"
+              ]
+            },
             "InteractionType": {
               "kind": "valueSet",
               "values": [
@@ -1901,7 +1945,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b163b538bd3f21bd27395032307c91212a318c2f7aeded559139c7bf511b189f"
+    "storageHash": "2a206879e2307f050fa1b5617d3aa00b165b6d3e3d6a4f0e5688ef085bb46b84"
   },
   "execution": {
     "executionHash": "685da8ddbdb7c9837dc2261f0489a2a2cf62f0aa56a599a4cbcffc897bba4ae5",
