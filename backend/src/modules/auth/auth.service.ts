@@ -22,10 +22,25 @@ async function signUpUser(input: SignupUser) {
 
   const hashedPass = await bcrypt.hash(data.password, SALT_ROUNDS);
 
-  const result = await User.create({
+  const dob = Temporal.PlainDate.from(data.dob)
+    .toZonedDateTime({
+      timeZone: "UTC",
+      plainTime: Temporal.PlainTime.from("00:00"),
+    })
+    .toInstant();
+
+  const result = await User.select(
+    "id",
+    "email",
+    "firstName",
+    "lastName",
+    "gender",
+    "dob",
+    "createdAt",
+  ).create({
     ...data,
     password: hashedPass,
-    dob: Temporal.Instant.fromEpochMilliseconds(data.dob.getTime()),
+    dob,
   });
   if (!result) {
     throw new Error("Error while creating User.");
@@ -54,6 +69,13 @@ async function signInUser(input: SignInUser) {
     throw new Error("Jwt secret is not defined");
   }
 
+  const dob = userExists.dob
+    ? Temporal.Instant.from(userExists.dob)
+        .toZonedDateTimeISO("UTC")
+        .toPlainDate()
+        .toString()
+    : undefined;
+
   const token = jwt.sign(
     {
       id: userExists.id,
@@ -61,8 +83,8 @@ async function signInUser(input: SignInUser) {
       gender: userExists.gender,
       firstName: userExists.firstName,
       lastName: userExists.lastName,
-      dob: userExists.dob,
-      createdAt: userExists.createdAt,
+      dob: dob,
+      createdAt: userExists.createdAt.toString(),
     },
     JWT_SECRET,
     {

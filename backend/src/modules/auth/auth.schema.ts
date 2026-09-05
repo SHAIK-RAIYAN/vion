@@ -6,7 +6,7 @@ const signUpUserSchema = zod.object({
   firstName: zod.string().trim().min(1).max(50),
   lastName: zod.string().trim().min(1).max(50),
   gender: zod.enum(["MALE", "FEMALE", "OTHER"]),
-  dob: zod.date(),
+  dob: zod.iso.date(),
 });
 
 const signInUserSchema = zod.object({
