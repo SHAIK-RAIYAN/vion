@@ -8,6 +8,10 @@ const getuser = (req: Request, res: Response) => {
 };
 
 const updateUser = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new Error("No user data in Request");
+  }
+
   const updatedUser = await userService.updateUser(req.body, req.user?.id);
   if (!updatedUser) {
     throw new Error("Error updating data. User not found");
@@ -23,4 +27,32 @@ const updateUser = asyncHandler(async (req: Request, res: Response) => {
     .json({ message: "Updated user data successfully", data: updatedUser });
 });
 
-export { getuser, updateUser };
+const deleteUser = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new Error("No user data in Request");
+  }
+
+  const deletedUser = await userService.deleteUser(req.user?.id);
+
+  return res
+    .status(200)
+    .json({ message: "Deleted user successfully", data: deletedUser });
+});
+
+const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new Error("No user data in Request");
+  }
+
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new Error("Old Password and new password are required");
+  }
+
+  await userService.changePassword(req.user?.id, currentPassword, newPassword);
+
+  res.status(200).json({ message: "Changed password successfully" });
+});
+
+export { getuser, updateUser, deleteUser, changePassword };
