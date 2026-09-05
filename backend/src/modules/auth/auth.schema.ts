@@ -3,8 +3,8 @@ import zod from "zod";
 const signUpUserSchema = zod.object({
   email: zod.email(),
   password: zod.string().min(8),
-  firstName: zod.string(),
-  lastName: zod.string(),
+  firstName: zod.string().trim().min(1).max(50),
+  lastName: zod.string().trim().min(1).max(50),
   gender: zod.enum(["MALE", "FEMALE", "OTHER"]),
   dob: zod.date(),
 });
