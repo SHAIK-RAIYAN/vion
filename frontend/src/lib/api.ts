@@ -7,7 +7,10 @@ import type {
 } from "../types/api";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined"
+    ? "/api/v1"
+    : (process.env.BACKEND_URL || "http://localhost:5000") + "/api/v1");
 
 export class ApiError extends Error {
   statusCode: number;
@@ -63,11 +66,24 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    const errorMessage =
+    let errorMessage =
       responseData?.message ||
       (Array.isArray(responseData?.message)
         ? responseData.message[0]?.message
-        : response.statusText || "Request failed");
+        : null);
+
+    if (!errorMessage) {
+      if (response.status === 404) {
+        errorMessage =
+          "Backend endpoint returned 404. Ensure backend is running (`bun run dev` in backend/).";
+      } else if (response.status === 502 || response.status === 503) {
+        errorMessage =
+          "Cannot reach Vion backend on port 5000. Please start the backend (`bun run dev` in backend/).";
+      } else {
+        errorMessage = response.statusText || "Request failed";
+      }
+    }
+
     throw new ApiError(
       typeof errorMessage === "string" ? errorMessage : "An error occurred",
       response.status,

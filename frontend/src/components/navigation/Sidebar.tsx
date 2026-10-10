@@ -1,11 +1,10 @@
 "use client";
 
-import React from "react";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
+import { Home, Settings, Tv } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
-import { Home, Tv, Settings, LogIn, Video } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -90,9 +89,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
             <span>Vion v0.1</span>
           </div>
-          <p className="text-[11px] leading-tight">
-            Independent video platform built with Next.js & Express.
-          </p>
         </div>
       </aside>
     </>

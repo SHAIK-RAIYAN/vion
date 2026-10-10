@@ -19,7 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground antialiased selection:bg-[var(--brand)] selection:text-white">
+      <body
+        suppressHydrationWarning
+        className="min-h-screen bg-background text-foreground antialiased selection:bg-[var(--brand)] selection:text-white"
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
