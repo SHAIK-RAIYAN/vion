@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import { AppError } from "../utils/AppError";
 
 export function errorHandler(
   error: unknown,
@@ -9,6 +10,9 @@ export function errorHandler(
 ) {
   if (error instanceof ZodError) {
     return res.status(400).json({ message: error.issues });
+  }
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({ message: error.message });
   }
   if (error instanceof Error) {
     return res.status(400).json({ message: error.message });
