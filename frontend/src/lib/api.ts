@@ -124,6 +124,20 @@ export const api = {
       return res;
     },
 
+    google: async (idToken: string) => {
+      const res = await request<{ message: string; token?: string; data?: User }>(
+        "/auth/google",
+        {
+          method: "POST",
+          body: JSON.stringify({ idToken }),
+        },
+      );
+      if (res.token && typeof window !== "undefined") {
+        localStorage.setItem("vion_token", res.token);
+      }
+      return res;
+    },
+
     signout: async () => {
       if (typeof window !== "undefined") {
         localStorage.removeItem("vion_token");

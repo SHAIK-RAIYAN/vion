@@ -14,9 +14,14 @@ const signInUserSchema = zod.object({
   password: zod.string().min(8),
 });
 
+const googleAuthSchema = zod.object({
+  idToken: zod.string().min(1, "Google ID token is required"),
+});
+
 type SignupUser = zod.infer<typeof signUpUserSchema>;
 type SignInUser = zod.infer<typeof signInUserSchema>;
+type GoogleAuthInput = zod.infer<typeof googleAuthSchema>;
 
-export { signUpUserSchema, signInUserSchema };
+export { signUpUserSchema, signInUserSchema, googleAuthSchema };
 
-export type { SignupUser, SignInUser };
+export type { SignupUser, SignInUser, GoogleAuthInput };

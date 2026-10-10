@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectItem } from "@/components/ui/select";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 import { X, Lock, Mail, Loader2, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -92,6 +93,27 @@ export function AuthModal() {
     } catch (err: any) {
       toast.error(err.message || "Failed to sign up");
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setLoading(true);
+    try {
+      const res = await api.auth.google(idToken);
+      setSuccessMessage(
+        res.data?.firstName
+          ? `Welcome to Vion, ${res.data.firstName}!`
+          : "Google authentication successful!",
+      );
+      await refreshUser();
+      setTimeout(() => {
+        closeAuthModal();
+        setSuccessMessage(null);
+      }, 750);
+    } catch (err: any) {
+      toast.error(err.message || "Google authentication failed");
+      setLoading(false);
+      throw err;
     }
   };
 
@@ -194,6 +216,24 @@ export function AuthModal() {
                   />
                 )}
               </button>
+            </div>
+
+            {/* Google Authentication Button */}
+            <div className="mb-4">
+              <GoogleSignInButton
+                text={tab === "signup" ? "signup" : "signin"}
+                disabled={loading}
+                onSuccess={handleGoogleSuccess}
+              />
+            </div>
+
+            <div className="relative flex items-center justify-center mb-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border/60" />
+              </div>
+              <span className="relative bg-card px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                or continue with email
+              </span>
             </div>
 
             {/* Forms with AnimatePresence */}
