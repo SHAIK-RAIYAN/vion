@@ -6,6 +6,7 @@ import subscriptionRouter from "../modules/subscription/subscription.routes";
 import uploadRouter from "../modules/upload/upload.routes";
 import interactionRouter from "../modules/interaction/interaction.routes";
 import commentRouter from "../modules/comment/comment.routes";
+import watchHistoryRouter from "../modules/watchHistory/watchHistory.routes";
 import { authMiddleware } from "../middlewares/authMiddleware";
 
 const router = Router();
@@ -23,5 +24,7 @@ router.use("/upload", uploadRouter);
 router.use("/interaction", interactionRouter);
 
 router.use("/comment", commentRouter);
+
+router.use("/history", watchHistoryRouter);
 
 export default router;
