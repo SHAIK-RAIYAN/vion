@@ -10,6 +10,6 @@ router.use("/auth", authRouter);
 
 router.use("/user", authMiddleware, userRouter);
 
-router.use("/channel", authMiddleware, channelRouter);
+router.use("/channel", channelRouter);
 
 export default router;

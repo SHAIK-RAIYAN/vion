@@ -7,7 +7,7 @@ import {
   type SignInUser,
   type SignupUser,
 } from "./auth.schema";
-import "temporal-polyfill/full/global";
+import { Temporal } from "temporal-polyfill";
 import { JWT_SECRET, SALT_ROUNDS } from "../../config/config";
 
 const { User } = db.orm.public;
