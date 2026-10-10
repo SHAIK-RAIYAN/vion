@@ -129,7 +129,7 @@ export function VideoCard({ video }: VideoCardProps) {
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
             <span>{formatViews(video.viewCount)}</span>
             <span>•</span>
-            <span>{formatTimeAgo(video.createdAt)}</span>
+            <span suppressHydrationWarning>{formatTimeAgo(video.createdAt)}</span>
           </div>
         </div>
       </div>

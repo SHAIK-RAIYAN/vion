@@ -6,6 +6,7 @@ import { useFont, type FontChoice } from "@/components/theme/FontProvider";
 import { useAuth } from "@/context/AuthContext";
 import { AppShell } from "@/components/navigation/AppShell";
 import { Button } from "@/components/ui/button";
+import { motion } from "motion/react";
 import {
   Moon,
   Sun,
@@ -84,14 +85,21 @@ export default function SettingsPage() {
                 <button
                   key={item.id}
                   onClick={() => setTheme(item.id)}
-                  className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`relative flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border transition-colors cursor-pointer ${
                     isSelected
-                      ? "border-primary bg-secondary/80 text-foreground font-semibold shadow-xs"
+                      ? "border-primary text-foreground font-semibold"
                       : "border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs">{item.label}</span>
+                  {isSelected && (
+                    <motion.div
+                      layoutId="settings-theme-pill"
+                      className="absolute inset-0 bg-secondary/80 rounded-xl shadow-xs -z-10"
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                  <Icon className="w-5 h-5 relative z-10" />
+                  <span className="text-xs relative z-10">{item.label}</span>
                 </button>
               );
             })}
@@ -111,13 +119,20 @@ export default function SettingsPage() {
                 <button
                   key={opt.id}
                   onClick={() => setFont(opt.id)}
-                  className={`flex items-start justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  className={`relative flex items-start justify-between p-3 rounded-xl border text-left transition-colors cursor-pointer ${
                     isSelected
-                      ? "border-primary bg-secondary/80 text-foreground shadow-2xs"
+                      ? "border-primary text-foreground font-semibold"
                       : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   }`}
                 >
-                  <div>
+                  {isSelected && (
+                    <motion.div
+                      layoutId="settings-font-pill"
+                      className="absolute inset-0 bg-secondary/80 rounded-xl shadow-2xs -z-10"
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                  <div className="relative z-10">
                     <p className="text-xs font-semibold text-foreground">
                       {opt.label}
                     </p>
@@ -126,7 +141,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   {isSelected && (
-                    <Check className="w-4 h-4 text-[var(--brand)] shrink-0 ml-2" />
+                    <Check className="w-4 h-4 text-[var(--brand)] shrink-0 ml-2 relative z-10" />
                   )}
                 </button>
               );
