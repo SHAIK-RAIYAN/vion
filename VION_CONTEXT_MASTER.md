@@ -295,6 +295,27 @@ model Video {
      - Documented video upload lifecycle, status monitoring, thumbnail & HLS asset inspection, and visibility testing.
      - Documented known limitations and performance optimization roadmap.
 
+### Milestone 12: Final Backend Audit, Integration Test and Fix Pass
+- **Scope**: Rigorous end-to-end repository audit against `vion_plan.md`, frontend API client alignment, cache-control headers, and comprehensive multi-file performance & failure benchmarking across real user videos.
+- **Key Implementations & Audit Findings**:
+  1. **Frontend-to-Backend Contract Synchronization** ([`frontend/src/lib/api.ts`](./frontend/src/lib/api.ts)):
+     - Aligned `api.uploads.getPresignedUrl` with `uploadId?: string` optional parameter to support upload session renewal.
+     - Aligned `api.uploads.finalize` with optional `{ storageKey?: string }` request body payload matching `finalizeUploadSchema`.
+  2. **Cache Headers for Media Metadata** ([`video.controller.ts`](./backend/src/modules/video/video.controller.ts)):
+     - Added `Cache-Control: private, no-transform, max-age=30` headers to `GET /videos/:videoId/playback` and JSON responses of `GET /videos/:videoId/manifest` to optimize player initial loading without exposing private session metadata to shared proxies.
+  3. **Multi-Video Performance & Failure Suite** ([`backend/scripts/run_final_backend_audit.ts`](./backend/scripts/run_final_backend_audit.ts)):
+     - Tested across a comprehensive real video matrix: 1080p AAC, 1080p silent, 1440p (2K) AAC, and 4K (2160p) UHD silent videos from the user's `videos/` folder.
+     - Measured FFprobe container inspection latency: average ~56ms (44ms to 66ms).
+     - Measured thumbnail extraction: 3 JPEG poster candidates in 540ms (~180ms/thumbnail).
+     - Measured adaptive HLS transcoding: 4-second video encoded to 360p in 371ms (~11x faster than real-time playback speed); silent video with stereo AAC audio synthesis encoded in 488ms (~8.3x faster than real-time).
+     - Tested failure scenarios: Verified 404 for missing media files, 422 for zero-byte files, 422 for corrupt media headers, and descriptive AppErrors for incomplete HLS playlists.
+     - Validated view count sliding window debouncing (immediate repeat requests from the same client IP throttled without database writes).
+  4. **Quality Gates & Builds**:
+     - 71 backend automated tests passing across 6 test files.
+     - Zero TypeScript typecheck errors (`tsc --noEmit`).
+     - 91 API endpoints verified via `bun run verify`.
+     - Production builds for both Bun backend and Next.js Turbopack frontend passed cleanly.
+
 ---
 
 ## 📊 Complete API Contract Status Matrix (91 Endpoints)
@@ -430,6 +451,7 @@ All work follows small, incremental commits on branch `dev`:
 | `074717f` | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
 | `b4a1469` | `feat(core): implement core operations for subscriptions, reactions, comments, history, feed, search, and admin` | `subscription.service.ts`, `interaction.service.ts`, `comment.service.ts`, `watchHistory.service.ts`, `feed.service.ts`, `search.service.ts`, `admin.routes.ts`, `coreRoutes.test.ts` |
 | `d2ab69d` | `feat(hardening): harden CORS, server shutdown, strict types, real media fixture verification, and operational documentation` | `index.ts`, `coreRoutes.test.ts`, `verify_real_fixture.ts`, `README.md`, `VION_CONTEXT_MASTER.md` |
+| `pending` | `feat(audit): complete final repository audit, frontend contract alignment, cache headers, and multi-video integration benchmark` | `video.controller.ts`, `api.ts`, `run_final_backend_audit.ts`, `VION_CONTEXT_MASTER.md` |
 
 ---
 

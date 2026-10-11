@@ -89,6 +89,7 @@ const getPlayback = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const playback = await videoService.getPlayback(targetId, req.user?.id);
+  res.setHeader("Cache-Control", "private, no-transform, max-age=30");
   res.status(200).json({
     success: true,
     message: "Playback configuration fetched successfully",
@@ -108,6 +109,7 @@ const getManifest = asyncHandler(async (req: Request, res: Response) => {
   // If client expects JSON response (API client or frontend query)
   const acceptHeader = req.headers.accept || "";
   if (acceptHeader.includes("application/json") || req.query.format === "json") {
+    res.setHeader("Cache-Control", "private, no-transform, max-age=30");
     return res.status(200).json({
       success: true,
       message: "HLS manifest fetched successfully",

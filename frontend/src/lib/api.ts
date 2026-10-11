@@ -309,7 +309,12 @@ export const api = {
       });
     },
 
-    getPresignedUrl: async (body: { fileName: string; contentType: string; fileSize?: number }) => {
+    getPresignedUrl: async (body: {
+      fileName: string;
+      contentType: string;
+      fileSize?: number;
+      uploadId?: string;
+    }) => {
       return request<{ message: string; data: any }>("/uploads/presigned-url", {
         method: "POST",
         body: JSON.stringify(body),
@@ -334,9 +339,10 @@ export const api = {
       });
     },
 
-    finalize: async (uploadId: string) => {
+    finalize: async (uploadId: string, body?: { storageKey?: string }) => {
       return request<{ message: string; data: any }>(`/uploads/${uploadId}/finalize`, {
         method: "POST",
+        body: JSON.stringify(body || {}),
       });
     },
 
