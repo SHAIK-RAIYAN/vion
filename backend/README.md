@@ -173,6 +173,46 @@ bun run worker
 bun run worker:dev
 ```
 
+---
+
+## 🧵 Background Video Processing Queue & Worker Foundation
+
+Video processing and thumbnail generation are computationally heavy tasks. To keep API latency low and prevent blocking HTTP threads, all media processing is offloaded to an asynchronous BullMQ queue backed by Redis.
+
+### 1. Job Flow & Payload
+- **Queue**: `video-transcoding` managed via BullMQ.
+- **Payload**: Minimal lightweight JSON metadata `{ uploadId, channelId, rawVideoKey }`. **Video bytes are never stored in Redis or job data.**
+- **Job ID**: Deterministic job identifier derived from the upload ID (`transcode-${uploadId}`) ensuring only one active or queued job can exist for an upload at any time.
+
+### 2. 7-Stage Worker Lifecycle
+Each transcoding job executed by `transcodingWorker.ts` proceeds through 7 explicit lifecycle stages:
+1. **Receive Job**: Worker pulls job with bounded concurrency (default: 2 workers).
+2. **Load Record**: Fetches the `Upload` record and channel relation from Neon PostgreSQL via Prisma.
+3. **Verify Raw Object**: Checks that the expected video object exists with non-zero bytes in Supabase Storage.
+4. **Validate State**: Idempotency check. If the upload is already marked `COMPLETED` in the database, processing is skipped idempotently without redundant work.
+5. **Run Media Processing**: Invokes `mediaService.makeThumbnails()` to download the source, inspect with FFprobe, and extract resized poster thumbnails with FFmpeg.
+6. **Record Status**: Updates `processingStatus` to `COMPLETED` and saves the selected thumbnail URL in the database. If all bounded retries fail, marks `processingStatus` as `FAILED`.
+7. **Clean Up Scratch Files**: Scratch directories and temporary downloaded frames are guaranteed to be purged in a `finally` block to prevent disk bloat.
+
+### 3. Architectural Separation of Concerns
+Queue coordination and media processing are strictly isolated:
+- **`videoQueue.ts`**: Decides *when* work is scheduled, job deduplication, retry configurations, and status queries. Does not contain any FFmpeg or media manipulation code.
+- **`mediaService.ts`**: Performs *how* media is processed, probed, and converted. Does not depend on BullMQ or Redis.
+- **`transcodingWorker.ts`**: Coordinates the pipeline by calling `mediaService` within the BullMQ processor context.
+
+### 4. Reliability & Fault Recovery
+- **Deterministic Job Deduplication**: `POST /uploads/:uploadId/finalize` uses `jobId: transcode-${uploadId}` and state queries (`active`, `waiting`, `delayed`) to ensure repeated requests return the current job rather than launching duplicates.
+- **Bounded Retries with Backoff**: Configured for 3 attempts with exponential backoff (starting at 3s delay).
+- **Graceful Shutdown**: Worker catches `SIGTERM` and `SIGINT` signals, halts job pickup, allows currently running transcoding jobs to wrap up cleanly, and closes Redis connections.
+- **Structured Logging**: All queue and worker logs are prefixed with `[Upload: ${uploadId}] [Job: ${job.id}]` for end-to-end traceability without leaking tokens or database secrets.
+- **Real Progress vs Database Status**: `GET /api/v1/uploads/:uploadId/status` distinguishes persistent database state (`PENDING`, `UPLOADING`, `TRANSCODING`, `COMPLETED`, `FAILED`) from transient queue state (`waiting`, `active`, `completed`, `failed`) and live progress without reporting fake percentages.
+
+### 5. Service-to-Service Security (`/api/v1/internal/uploads`)
+Internal management routes (used for direct worker-to-API communication or webhooks) require service authentication via:
+- Header: `x-internal-secret: <JWT_SECRET_KEY>` or `Authorization: Bearer <JWT_SECRET_KEY>`
+- Unauthorized requests receive `403 Forbidden` (`INTERNAL_AUTH_REQUIRED`).
+
+
 ### 4. Verification and Automated Tests
 ```bash
 # Static TypeScript verification

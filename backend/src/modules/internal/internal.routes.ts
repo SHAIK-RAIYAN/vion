@@ -3,17 +3,26 @@ import { db } from "../../prisma/db";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { AppError } from "../../utils/AppError";
 
+import { JWT_SECRET } from "../../config/config";
+
 const router = Router();
 const { Upload, Video } = db.orm.public;
 
-// Optional internal service token verification
+// Mandatory service-to-service internal authentication
 const internalAuth = (req: Request, res: Response, next: Function) => {
-  const secret = process.env.INTERNAL_WORKER_SECRET;
-  if (secret) {
-    const authHeader = req.headers["x-internal-secret"];
-    if (authHeader !== secret) {
-      throw new AppError("Forbidden: Invalid internal worker credentials", 403);
-    }
+  const secret = process.env.INTERNAL_WORKER_SECRET || JWT_SECRET;
+  const provided =
+    req.headers["x-internal-secret"] ||
+    (req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
+
+  if (!provided || provided !== secret) {
+    throw new AppError(
+      "Forbidden: Invalid or missing service-to-service internal credentials",
+      403,
+      "INTERNAL_AUTH_REQUIRED",
+    );
   }
   next();
 };

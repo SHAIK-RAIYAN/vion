@@ -17,6 +17,7 @@ let videoQueueInstance: Queue<TranscodeJobData> | null = null;
 
 /**
  * Returns the BullMQ Queue singleton for video transcoding.
+ * Configured with bounded retries, exponential backoff, and deduplication options.
  */
 export function getVideoQueue(): Queue<TranscodeJobData> {
   if (videoQueueInstance) {
@@ -31,14 +32,14 @@ export function getVideoQueue(): Queue<TranscodeJobData> {
       attempts: 3,
       backoff: {
         type: "exponential",
-        delay: 5000, // 5s initial retry delay
+        delay: 3000, // 3s initial backoff with exponential multiplier
       },
       removeOnComplete: {
-        count: 100, // keep latest 100 completed jobs for audit
-        age: 24 * 3600, // or 24 hours
+        count: 200, // keep latest 200 completed jobs for audit
+        age: 24 * 3600, // 24 hours
       },
       removeOnFail: {
-        count: 500, // retain failed jobs for debugging
+        count: 500, // retain failed jobs for diagnostic logging
       },
     },
   });
@@ -51,7 +52,30 @@ export function getVideoQueue(): Queue<TranscodeJobData> {
 }
 
 /**
+ * Retrieves an existing transcoding job by uploadId.
+ * Used for live queue progress queries and deduplication checks.
+ */
+export async function getTranscodeJobByUploadId(
+  uploadId: string,
+): Promise<Job<TranscodeJobData> | null> {
+  if (!isRedisConfigured()) {
+    return null;
+  }
+
+  try {
+    const queue = getVideoQueue();
+    const job = await queue.getJob(`transcode-${uploadId}`);
+    return job || null;
+  } catch (err: any) {
+    console.warn(`[Video Queue Warning] Failed to fetch job for upload ${uploadId}:`, err.message);
+    return null;
+  }
+}
+
+/**
  * Enqueues a video transcoding job into BullMQ.
+ * Enforces stable, deterministic job IDs (`transcode-${uploadId}`) to guarantee
+ * that duplicate requests for the same upload resolve to the exact same job.
  */
 export async function enqueueTranscodeJob(
   data: TranscodeJobData,
@@ -59,19 +83,37 @@ export async function enqueueTranscodeJob(
 ): Promise<Job<TranscodeJobData> | null> {
   if (!isRedisConfigured()) {
     console.warn(
-      `[Video Queue] Redis is not configured; skipping job queueing for upload ${data.uploadId}.`,
+      `[Video Queue] Redis is not configured; skipping background job queueing for upload ${data.uploadId}.`,
     );
     return null;
   }
 
   const queue = getVideoQueue();
+  const stableJobId = `transcode-${data.uploadId}`;
+
+  // Idempotency: check if active or waiting job already exists
+  try {
+    const existingJob = await queue.getJob(stableJobId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (state === "waiting" || state === "active" || state === "delayed") {
+        console.info(
+          `[Video Queue] Job ${stableJobId} already exists in state '${state}'. Returning existing job.`,
+        );
+        return existingJob;
+      }
+    }
+  } catch {
+    // Proceed to add job if check fails
+  }
+
   const jobPayload: TranscodeJobData = {
     ...data,
     enqueuedAt: data.enqueuedAt || new Date().toISOString(),
   };
 
   const job = await queue.add(`transcode:${data.uploadId}`, jobPayload, {
-    jobId: `transcode-${data.uploadId}`, // Prevents duplicate concurrent jobs for same upload
+    jobId: stableJobId,
     ...opts,
   });
 

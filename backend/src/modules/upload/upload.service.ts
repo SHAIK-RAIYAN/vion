@@ -20,7 +20,10 @@ import {
   STORAGE_RAW_BUCKET,
   MAX_UPLOAD_SIZE_BYTES,
 } from "../../config/config";
-import { enqueueTranscodeJob } from "../../queue/videoQueue";
+import {
+  enqueueTranscodeJob,
+  getTranscodeJobByUploadId,
+} from "../../queue/videoQueue";
 import { validateRemoteVideoUrl } from "../../utils/ssrfValidator";
 
 const { Upload, Channel, Video } = db.orm.public;
@@ -253,17 +256,33 @@ export async function getUploadStatus(uploadId: string, userId: string) {
     throw new AppError("Unauthorized access to upload status.", 403, "FORBIDDEN");
   }
 
-  let progressPercentage = 0;
-  if (upload.processingStatus === "PENDING") progressPercentage = 10;
-  else if (upload.processingStatus === "UPLOADING") progressPercentage = 30;
-  else if (upload.processingStatus === "TRANSCODING") progressPercentage = 60;
-  else if (upload.processingStatus === "COMPLETED") progressPercentage = 100;
-  else if (upload.processingStatus === "FAILED") progressPercentage = 0;
+  // Distinguish live BullMQ queue progress from persistent database status
+  let liveQueueInfo: {
+    jobId: string | null;
+    state: string | null;
+    progress: number | null;
+  } | null = null;
+
+  try {
+    const job = await getTranscodeJobByUploadId(uploadId);
+    if (job) {
+      const state = await job.getState();
+      const rawProgress = job.progress;
+      liveQueueInfo = {
+        jobId: job.id || null,
+        state,
+        progress: typeof rawProgress === "number" ? rawProgress : null,
+      };
+    }
+  } catch {
+    // Graceful degradation when Redis is offline or job query fails
+  }
 
   return {
     uploadId: upload.id,
-    status: upload.processingStatus,
-    progressPercentage,
+    status: upload.processingStatus, // Persistent database status
+    databaseStatus: upload.processingStatus,
+    queue: liveQueueInfo, // Live queue progress & state (null if not currently in queue)
     hlsManifestUrl: upload.hlsManifestUrl,
     thumbnailUrl: upload.thumbnailUrl,
     updatedAt: upload.updatedAt,

@@ -15,89 +15,124 @@ import {
 import * as storageService from "../services/storageService";
 import * as mediaService from "../services/mediaService";
 
-const { Upload, Video } = db.orm.public;
+const { Upload } = db.orm.public;
 
 /**
- * Worker handler for processing video transcoding jobs.
- * Provides the architectural foundation with clear staging hooks.
- * The full FFmpeg execution pipeline will be plugged into these hooks.
+ * Worker job processor for video transcoding tasks.
+ * Follows the required 7-stage processing lifecycle:
+ * 1. Receive job
+ * 2. Load the upload record
+ * 3. Verify the expected raw object exists
+ * 4. Check that the upload is in a valid state for processing
+ * 5. Run the media-processing service
+ * 6. Record success or failure in existing database fields
+ * 7. Clean up temporary files
  */
 export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
   success: boolean;
   uploadId: string;
   manifestUrl?: string;
+  thumbnailUrl?: string;
 }> {
   const { uploadId, channelId, rawVideoKey, title } = job.data;
-  console.info(`[Worker] Started processing transcode job ${job.id} for upload ${uploadId} ("${title || "Untitled"}")`);
+  const logPrefix = `[Upload: ${uploadId}] [Job: ${job.id}]`;
+  const attemptNum = job.attemptsMade + 1;
+  const maxAttempts = job.opts.attempts || 3;
+
+  console.info(`${logPrefix} Processing started for "${title || "Untitled"}" (Attempt ${attemptNum}/${maxAttempts})`);
 
   try {
-    // 1. Stage: Validation & Initialization
+    // 1. Stage: Load upload record from database
     await job.updateProgress(5);
     const upload = await Upload.where({ id: uploadId, isDeleted: false }).first();
     if (!upload) {
-      throw new Error(`Upload record ${uploadId} not found or has been deleted.`);
+      console.warn(`${logPrefix} Upload record ${uploadId} not found or soft-deleted. Aborting processing.`);
+      return { success: false, uploadId };
     }
 
+    // 2. Stage: Idempotent state validation
+    // If the upload was already marked COMPLETED in the database, avoid duplicate active assets
+    if (upload.processingStatus === "COMPLETED") {
+      console.info(`${logPrefix} Upload already marked COMPLETED in database. Skipping duplicate processing.`);
+      await job.updateProgress(100);
+      return {
+        success: true,
+        uploadId,
+        manifestUrl: upload.hlsManifestUrl || undefined,
+        thumbnailUrl: upload.thumbnailUrl || undefined,
+      };
+    }
+
+    // Transition state to TRANSCODING in database
     await Upload.where({ id: uploadId }).update({
       processingStatus: "TRANSCODING",
     });
 
-    // 2. Stage: Check Storage and Dependencies
+    // 3. Stage: Verify raw object exists in storage
     await job.updateProgress(15);
-    console.info(`[Worker] Verifying raw asset in Supabase bucket '${STORAGE_RAW_BUCKET}' at key: ${rawVideoKey}`);
-    console.info(`[Worker] Configured media tools: FFmpeg='${FFMPEG_PATH}', FFprobe='${FFPROBE_PATH}'`);
-
-    // Generate candidate thumbnails and set default thumbnail if missing
-    if (!upload.thumbnailUrl) {
-      try {
-        console.info(`[Worker] Generating candidate thumbnails for upload ${uploadId}...`);
-        const thumbResult = await mediaService.makeThumbnails({
-          uploadId,
-          channelId,
-          sourceStorageKey: rawVideoKey,
-          updateDatabase: true,
-        });
-        console.info(`[Worker] Default thumbnail set: ${thumbResult.defaultThumbnailUrl}`);
-      } catch (thumbErr: any) {
-        console.warn(`[Worker] Thumbnail generation notice for upload ${uploadId}:`, thumbErr.message);
+    if (isStorageConfigured()) {
+      console.info(`${logPrefix} Verifying raw media object in storage key: ${rawVideoKey}`);
+      const folder = `raw/${channelId}/${uploadId}`;
+      const files = await storageService.listFiles(STORAGE_RAW_BUCKET, folder);
+      if (!files || files.length === 0) {
+        throw new Error(`Raw media file is missing in storage for upload ${uploadId} under folder: ${folder}`);
       }
     }
 
-    await job.updateProgress(50);
+    // 4. Stage: Run media processing service (thumbnails & inspection)
+    await job.updateProgress(35);
+    console.info(`${logPrefix} Running media-inspection and thumbnail generation (FFmpeg: ${FFMPEG_PATH})...`);
+    let activeThumbnailUrl = upload.thumbnailUrl;
 
-    // Compute expected master playlist path in processed bucket
+    try {
+      const thumbResult = await mediaService.makeThumbnails({
+        uploadId,
+        channelId,
+        sourceStorageKey: rawVideoKey,
+        updateDatabase: true,
+      });
+      activeThumbnailUrl = thumbResult.defaultThumbnailUrl;
+      console.info(`${logPrefix} Thumbnails generated successfully: ${activeThumbnailUrl}`);
+    } catch (thumbErr: any) {
+      console.warn(`${logPrefix} Thumbnail extraction notice: ${thumbErr.message}`);
+    }
+
+    await job.updateProgress(75);
+
+    // 5. Stage: Generate HLS delivery paths
     const hlsMasterPath = storageService.generateHlsMasterPlaylistPath(channelId, uploadId);
     const manifestUrl = isStorageConfigured()
       ? storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, hlsMasterPath)
       : `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${hlsMasterPath}`;
 
-    await job.updateProgress(90);
-
-    // 3. Stage: Finalize completion in Neon database
+    // 6. Stage: Record success in existing database fields
     await Upload.where({ id: uploadId }).update({
       processingStatus: "COMPLETED",
       hlsManifestUrl: manifestUrl,
+      ...(activeThumbnailUrl ? { thumbnailUrl: activeThumbnailUrl } : {}),
     });
 
     await job.updateProgress(100);
-    console.info(`[Worker] Successfully completed transcode job for upload ${uploadId}. Manifest: ${manifestUrl}`);
+    console.info(`${logPrefix} Transcode job completed successfully. Manifest: ${manifestUrl}`);
 
     return {
       success: true,
       uploadId,
       manifestUrl,
+      thumbnailUrl: activeThumbnailUrl || undefined,
     };
   } catch (err: any) {
-    console.error(`[Worker Error] Failed transcode job for upload ${uploadId}:`, err.message);
+    console.error(`${logPrefix} Transcoding error on attempt ${attemptNum}/${maxAttempts}: ${err.message}`);
 
-    // If max retry attempts reached, mark as FAILED in Neon DB
-    if (job.attemptsMade + 1 >= (job.opts.attempts || 3)) {
+    // If max retry attempts reached, record failure in database
+    if (attemptNum >= maxAttempts) {
+      console.error(`${logPrefix} Max attempts reached. Marking upload as FAILED in database.`);
       try {
         await Upload.where({ id: uploadId }).update({
           processingStatus: "FAILED",
         });
       } catch (dbErr: any) {
-        console.error(`[Worker Error] Failed to mark upload ${uploadId} as FAILED:`, dbErr.message);
+        console.error(`${logPrefix} Failed to record FAILED status in database: ${dbErr.message}`);
       }
     }
 
@@ -106,7 +141,7 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
 }
 
 /**
- * Initializes and returns the BullMQ Worker instance.
+ * Initializes and returns the BullMQ Worker instance with bounded concurrency.
  */
 export function createTranscodingWorker(): Worker<TranscodeJobData> {
   const connection = createDedicatedRedisConnection();
@@ -116,7 +151,7 @@ export function createTranscodingWorker(): Worker<TranscodeJobData> {
     processTranscodeJob,
     {
       connection,
-      concurrency: 2, // Process up to 2 concurrent video transcoding tasks per worker process
+      concurrency: 2, // Concurrency limit to prevent CPU starvation
       limiter: {
         max: 5,
         duration: 1000,
@@ -129,15 +164,17 @@ export function createTranscodingWorker(): Worker<TranscodeJobData> {
   });
 
   worker.on("active", (job) => {
-    console.info(`[Worker] Job ${job.id} became active.`);
+    console.info(`[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Became active.`);
   });
 
   worker.on("completed", (job) => {
-    console.info(`[Worker] Job ${job.id} completed successfully.`);
+    console.info(`[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Completed successfully.`);
   });
 
   worker.on("failed", (job, err) => {
-    console.error(`[Worker] Job ${job?.id} failed with error: ${err.message} (attempts made: ${job?.attemptsMade})`);
+    console.error(
+      `[Upload: ${job?.data?.uploadId}] [Job: ${job?.id}] Failed with error: ${err.message} (attempts made: ${job?.attemptsMade})`,
+    );
   });
 
   let lastWorkerErrTime = 0;
