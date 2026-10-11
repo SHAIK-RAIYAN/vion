@@ -94,15 +94,23 @@ export function VideoCard({ video }: VideoCardProps) {
       <div className="flex gap-3 px-0.5">
         {/* Channel Profile Picture */}
         <div className="shrink-0 mt-0.5">
-          {video.channel?.profilePictureUrl ? (
-            <img
-              src={video.channel.profilePictureUrl}
-              alt={video.channel.channelName || "Channel"}
-              className="w-8 h-8 rounded-full object-cover border border-border/60"
-            />
+          {video.channel?.id ? (
+            <Link href={`/channel/${video.channel.id}`} className="block">
+              {video.channel?.profilePictureUrl ? (
+                <img
+                  src={video.channel.profilePictureUrl}
+                  alt={video.channel.channelName || "Channel"}
+                  className="w-8 h-8 rounded-full object-cover border border-border/60 hover:opacity-90 transition-opacity"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-muted-foreground uppercase hover:opacity-90 transition-opacity">
+                  {video.channel?.channelName?.[0] || <UserIcon className="w-4 h-4" />}
+                </div>
+              )}
+            </Link>
           ) : (
             <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-muted-foreground uppercase">
-              {video.channel?.channelName?.[0] || <UserIcon className="w-4 h-4" />}
+              <UserIcon className="w-4 h-4" />
             </div>
           )}
         </div>
@@ -116,14 +124,17 @@ export function VideoCard({ video }: VideoCardProps) {
           </Link>
 
           {video.channel && (
-            <p className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 truncate">
+            <Link
+              href={`/channel/${video.channel.id}`}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 truncate block"
+            >
               {video.channel.channelName}
               {video.channel.handle && (
                 <span className="text-[11px] opacity-75 ml-1">
                   @{video.channel.handle}
                 </span>
               )}
-            </p>
+            </Link>
           )}
 
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">

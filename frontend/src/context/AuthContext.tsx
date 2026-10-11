@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, ApiError } from "../lib/api";
+import { api } from "../lib/api";
 import type { User } from "../types/api";
 import { toast } from "sonner";
 
@@ -49,16 +49,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await api.auth.getMe();
+        if (isMounted) {
+          setUser(res.data || null);
+        }
+      } catch {
+        if (isMounted) setUser(null);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const signout = async () => {
     try {
       await api.auth.signout();
       setUser(null);
       toast.success("Signed out successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Signout failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Signout failed";
+      toast.error(message);
     }
   };
 

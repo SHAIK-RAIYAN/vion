@@ -93,8 +93,8 @@ describe("Background Video Processing Queue & Worker", () => {
         channelId: "chan_1",
         title: "Done Video",
         processingStatus: "COMPLETED",
-        hlsManifestUrl: "https://storage.vion.local/processed-videos/hls/master.m3u8",
-        thumbnailUrl: "https://storage.vion.local/thumbnails/default.jpg",
+        hlsManifestUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_1/upl_already_done/hls/master.m3u8",
+        thumbnailUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/thumbnails/thumbnails/chan_1/upl_already_done/default.jpg",
       };
 
       const originalWhere = db.orm.public.Upload.where;

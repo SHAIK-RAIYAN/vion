@@ -5,94 +5,36 @@ import type {
   SubscriptionItem,
   Channel,
 } from "../types/api";
+import { axiosClient, ApiError, API_BASE_URL } from "./axios";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined"
-    ? "/api/v1"
-    : (process.env.BACKEND_URL || "http://localhost:5000") + "/api/v1");
-
-export class ApiError extends Error {
-  statusCode: number;
-  data: any;
-
-  constructor(message: string, statusCode: number, data?: any) {
-    super(message);
-    this.name = "ApiError";
-    this.statusCode = statusCode;
-    this.data = data;
-  }
-}
+export { axiosClient, ApiError, API_BASE_URL };
+export * from "@/services";
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  const method = (options.method || "GET").toUpperCase();
+  const url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("vion_token") : null;
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: "include", // send/receive cookies
-    });
-  } catch (err: any) {
-    throw new ApiError(
-      "Unable to connect to Vion backend. Ensure the server is running.",
-      0,
-    );
-  }
-
-  let responseData: any = null;
-  const contentType = response.headers.get("content-type");
-  if (contentType && contentType.includes("application/json")) {
+  let parsedBody: any = undefined;
+  if (options.body) {
     try {
-      responseData = await response.json();
+      parsedBody =
+        typeof options.body === "string" ? JSON.parse(options.body) : options.body;
     } catch {
-      responseData = null;
+      parsedBody = options.body;
     }
   }
 
-  if (!response.ok) {
-    let errorMessage =
-      responseData?.error?.message ||
-      responseData?.message ||
-      (Array.isArray(responseData?.message)
-        ? responseData.message[0]?.message
-        : null);
+  const res = await axiosClient.request<T>({
+    url,
+    method,
+    data: parsedBody,
+    headers: options.headers as Record<string, string>,
+  });
 
-    if (!errorMessage) {
-      if (response.status === 404) {
-        errorMessage =
-          "Backend endpoint returned 404. Ensure backend is running (`bun run dev` in backend/).";
-      } else if (response.status === 502 || response.status === 503) {
-        errorMessage =
-          "Cannot reach Vion backend on port 5000. Please start the backend (`bun run dev` in backend/).";
-      } else {
-        errorMessage = response.statusText || "Request failed";
-      }
-    }
-
-    throw new ApiError(
-      typeof errorMessage === "string" ? errorMessage : "An error occurred",
-      response.status,
-      responseData,
-    );
-  }
-
-  return responseData as T;
+  return res.data;
 }
 
 export const api = {
@@ -302,8 +244,24 @@ export const api = {
 
   // 5. UPLOADS (/api/v1/uploads) - Ingest and processing lifecycle
   uploads: {
-    create: async (body: { title: string; description?: string; visibility?: string }) => {
-      return request<{ message: string; data: Upload }>("/uploads", {
+    create: async (body: {
+      title: string;
+      description?: string;
+      visibility?: string;
+      fileName?: string;
+      contentType?: string;
+      thumbnailUrl?: string;
+    }) => {
+      return request<{
+        message: string;
+        data: {
+          uploadId: string;
+          title: string;
+          visibility: any;
+          processingStatus: string;
+          uploadSession: any;
+        };
+      }>("/uploads", {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -336,6 +294,10 @@ export const api = {
     getStatus: async (uploadId: string) => {
       return request<{ message: string; data: any }>(`/uploads/${uploadId}/status`, {
         method: "GET",
+        headers: {
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache",
+        },
       });
     },
 
@@ -420,6 +382,12 @@ export const api = {
       return request<{ message: string; data: any }>(`/videos/${videoId}/comments`, {
         method: "POST",
         body: JSON.stringify({ content }),
+      });
+    },
+
+    deleteComment: async (commentId: string) => {
+      return request<{ message: string; data: any }>(`/comments/${commentId}`, {
+        method: "DELETE",
       });
     },
   },

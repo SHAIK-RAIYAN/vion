@@ -1,3 +1,4 @@
+import { Temporal } from "temporal-polyfill";
 import { db } from "../../prisma/db";
 import { AppError } from "../../utils/AppError";
 import { getPaginationMeta, type Pagination } from "../../utils/pagination";
@@ -37,9 +38,15 @@ export async function recordProgress(
   }).first();
 
   if (existing) {
+    // Prevent out-of-order network arrival from regressing progress while allowing rewinding to beginning
+    const newProgress =
+      progress < existing.progressTimeStamp && progress > 5
+        ? existing.progressTimeStamp
+        : progress;
+
     const updated = await WatchHistory.where({ id: existing.id }).update({
-      progressTimeStamp: progress,
-      watchedAt: new Date(),
+      progressTimeStamp: newProgress,
+      watchedAt: Temporal.Now.instant(),
     });
     return updated;
   }
@@ -49,7 +56,7 @@ export async function recordProgress(
       userId,
       uploadId: targetId,
       progressTimeStamp: progress,
-      watchedAt: new Date(),
+      watchedAt: Temporal.Now.instant(),
     });
     return created;
   } catch (err: any) {
@@ -59,9 +66,13 @@ export async function recordProgress(
       uploadId: targetId,
     }).first();
     if (raceRecord) {
+      const newProgress =
+        progress < raceRecord.progressTimeStamp && progress > 5
+          ? raceRecord.progressTimeStamp
+          : progress;
       const updated = await WatchHistory.where({ id: raceRecord.id }).update({
-        progressTimeStamp: progress,
-        watchedAt: new Date(),
+        progressTimeStamp: newProgress,
+        watchedAt: Temporal.Now.instant(),
       });
       return updated;
     }
@@ -120,8 +131,10 @@ export async function getWatchHistory(userId: string, pagination: Pagination) {
     })),
   ]);
 
+  const visibleItems = items.filter((item) => Boolean(item.upload));
+
   return {
-    items,
+    items: visibleItems,
     pagination: getPaginationMeta(countResult.count, page, limit),
   };
 }

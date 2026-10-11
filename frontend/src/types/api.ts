@@ -8,6 +8,7 @@ export interface User {
   gender: UserGender;
   dob?: string | null;
   createdAt: string;
+  channel?: Channel | null;
 }
 
 export interface Channel {
@@ -33,7 +34,7 @@ export type ProcessingStatus =
 
 export interface VideoRendition {
   id: string;
-  uploadId: string;
+  uploadId?: string;
   resolution: string;
   url: string;
 }
@@ -63,6 +64,35 @@ export interface Upload {
   interactions?: number;
 }
 
+export interface PlaybackInfo {
+  videoId: string;
+  title: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  streamType: "HLS" | "DIRECT";
+  hlsManifestUrl?: string | null;
+  manifestRoute: string;
+  processingStatus: ProcessingStatus;
+  isReady: boolean;
+  visibility: UploadVisibility;
+  renditions: VideoRendition[];
+  channel?: {
+    id: string;
+    handle: string;
+    channelName: string;
+    profilePictureUrl?: string | null;
+  } | null;
+}
+
+export interface LikeStatus {
+  videoId: string;
+  likes: number;
+  dislikes: number;
+  liked: boolean;
+  disliked: boolean;
+  userInteraction: "LIKE" | "DISLIKE" | null;
+}
+
 export interface PaginationMeta {
   total: number;
   page: number;
@@ -76,6 +106,7 @@ export interface PaginatedResponse<T> {
   message?: string;
   items: T[];
   pagination: PaginationMeta;
+  nextCursor?: string | null;
 }
 
 export interface SubscriptionItem {
@@ -91,3 +122,60 @@ export interface SubscriptionItem {
     description?: string | null;
   };
 }
+
+export interface Comment {
+  id: string;
+  userId: string;
+  uploadId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  user?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    channel?: {
+      id: string;
+      handle: string;
+      channelName: string;
+      profilePictureUrl?: string | null;
+    } | null;
+  };
+}
+
+export interface Interaction {
+  id: string;
+  userId: string;
+  uploadId: string;
+  type: "LIKE" | "DISLIKE";
+  createdAt: string;
+}
+
+export interface WatchHistoryItem {
+  id: string;
+  userId: string;
+  uploadId: string;
+  progressTimeStamp: number;
+  watchedAt: string;
+  upload?: Upload;
+}
+
+/** Canonical API Envelopes */
+export interface ApiSuccessEnvelope<T = unknown> {
+  success: true;
+  data: T;
+  message?: string;
+}
+
+export interface ApiErrorDetail {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+export interface ApiErrorEnvelope {
+  success: false;
+  error: ApiErrorDetail;
+}
+
+export type ApiResponse<T = unknown> = ApiSuccessEnvelope<T> | ApiErrorEnvelope;

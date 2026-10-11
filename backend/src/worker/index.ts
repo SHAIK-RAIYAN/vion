@@ -38,6 +38,7 @@ async function main() {
 
   // Initialize and spin up worker
   const worker = createTranscodingWorker();
+  console.info("[Worker] Service successfully booted. Ready to transcode incoming video jobs.");
 
   // Graceful shutdown handling
   let isShuttingDown = false;
@@ -62,6 +63,14 @@ async function main() {
 
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+  process.on("unhandledRejection", (reason: any) => {
+    console.error("[Worker Unhandled Rejection]:", reason?.message || reason);
+  });
+
+  process.on("uncaughtException", (err: any) => {
+    console.error("[Worker Uncaught Exception]:", err?.message || err);
+  });
 }
 
 main().catch((err) => {

@@ -16,7 +16,8 @@ import {
   getEligibleRenditions,
   STANDARD_QUALITY_LADDER,
 } from "../config/transcodingProfiles";
-import { FFMPEG_PATH, TEMP_MEDIA_DIR } from "../config/config";
+import { FFMPEG_PATH, TEMP_MEDIA_DIR, STORAGE_PROCESSED_BUCKET } from "../config/config";
+import * as storageService from "./storageService";
 import { AppError } from "../utils/AppError";
 import { db } from "../prisma/db";
 
@@ -387,7 +388,10 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
         channelId: "chan_test",
         processingStatus: "COMPLETED",
         isDeleted: false,
-        hlsManifestUrl: "https://storage.vion.local/processed-videos/master.m3u8",
+        hlsManifestUrl: storageService.getPublicUrl(
+          STORAGE_PROCESSED_BUCKET,
+          "processed/chan_test/upl_pipeline_done/hls/master.m3u8",
+        ),
         channel: { id: "chan_test", userId: "usr_1" },
       };
 

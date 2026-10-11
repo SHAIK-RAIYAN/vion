@@ -16,9 +16,9 @@ const FontContext = createContext<FontContextType>({
 
 const FONT_MAP: Record<FontChoice, string> = {
   system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  inter: "'Inter', system-ui, sans-serif",
-  outfit: "'Outfit', system-ui, sans-serif",
-  jakarta: "'Plus Jakarta Sans', system-ui, sans-serif",
+  inter: "var(--font-inter), 'Inter', system-ui, sans-serif",
+  outfit: "var(--font-outfit), 'Outfit', system-ui, sans-serif",
+  jakarta: "var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif",
 };
 
 export function FontProvider({ children }: { children: React.ReactNode }) {

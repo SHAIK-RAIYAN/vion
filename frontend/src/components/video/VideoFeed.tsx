@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { Upload, PaginationMeta } from "@/types/api";
 import { VideoCard } from "./VideoCard";
 import { VideoCardSkeleton } from "./VideoCardSkeleton";

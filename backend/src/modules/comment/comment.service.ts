@@ -29,13 +29,23 @@ export async function createComment(
     throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
   }
 
-  const comment = await Comment.create({
+  const created = await Comment.create({
     uploadId,
     userId,
     content: data.content,
   });
 
-  return comment;
+  const fullComment = await Comment.where({ id: created.id })
+    .include("user", (u) =>
+      u
+        .select("id", "firstName", "lastName")
+        .include("channel", (c) =>
+          c.select("id", "handle", "channelName", "profilePictureUrl"),
+        ),
+    )
+    .first();
+
+  return fullComment ?? created;
 }
 
 export async function getCommentsByUpload(
@@ -100,11 +110,21 @@ export async function updateComment(
     throw new AppError("You can only edit your own comment.", 403, "FORBIDDEN");
   }
 
-  const updated = await Comment.where({ id: commentId }).update({
+  await Comment.where({ id: commentId }).update({
     content: data.content,
   });
 
-  return updated;
+  const updated = await Comment.where({ id: commentId })
+    .include("user", (u) =>
+      u
+        .select("id", "firstName", "lastName")
+        .include("channel", (c) =>
+          c.select("id", "handle", "channelName", "profilePictureUrl"),
+        ),
+    )
+    .first();
+
+  return updated ?? { id: commentId, content: data.content };
 }
 
 export async function deleteComment(commentId: string, userId: string) {

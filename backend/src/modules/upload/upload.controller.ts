@@ -68,6 +68,17 @@ const getUploadStatus = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Upload ID is required.", 400);
   }
 
+  // Prevent 304 Not Modified caching from masking live progress transitions during polling
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Surrogate-Control": "no-store",
+  });
+  // Disable conditional ETag / timestamp checks so fresh JSON body is always returned
+  req.headers["if-none-match"] = undefined;
+  req.headers["if-modified-since"] = undefined;
+
   const status = await uploadService.getUploadStatus(targetId, req.user.id);
   res.status(200).json({
     success: true,

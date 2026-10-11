@@ -92,6 +92,43 @@ export function generateThumbnailKey(
 // Core Storage Operations
 // ============================================================================
 
+let bucketsEnsured = false;
+
+/**
+ * Ensures that all required Supabase Storage buckets exist with appropriate permissions.
+ * - raw-videos: Private (access only via signed URLs)
+ * - processed-videos: Public (direct streaming delivery)
+ * - thumbnails: Public (direct image loading)
+ */
+export async function ensureStorageBucketsExist(): Promise<void> {
+  if (bucketsEnsured || !isStorageConfigured()) return;
+
+  try {
+    const client = getSupabaseClient();
+    const { data: buckets, error } = await client.storage.listBuckets();
+    if (error) {
+      console.warn("[Storage Service] Notice listing buckets during initialization:", error.message);
+      return;
+    }
+
+    const existingNames = new Set((buckets || []).map((b) => b.name));
+
+    if (!existingNames.has(STORAGE_RAW_BUCKET)) {
+      await client.storage.createBucket(STORAGE_RAW_BUCKET, { public: false });
+    }
+    if (!existingNames.has(STORAGE_PROCESSED_BUCKET)) {
+      await client.storage.createBucket(STORAGE_PROCESSED_BUCKET, { public: true });
+    }
+    if (!existingNames.has(STORAGE_THUMBNAILS_BUCKET)) {
+      await client.storage.createBucket(STORAGE_THUMBNAILS_BUCKET, { public: true });
+    }
+
+    bucketsEnsured = true;
+  } catch (err: any) {
+    console.warn("[Storage Service] Notice ensuring storage buckets:", err?.message || err);
+  }
+}
+
 /**
  * Generates a signed upload URL for direct, secure client-to-storage ingest.
  * Only the server generates the destination path; clients cannot alter it.
@@ -104,11 +141,23 @@ export async function createSignedUploadUrl(
   const client = getSupabaseClient();
   const expiresIn = options.expiresInSeconds || 3600; // default 1 hour
 
-  const { data, error } = await client.storage
+  let { data, error } = await client.storage
     .from(bucket)
     .createSignedUploadUrl(path, {
       upsert: options.upsert ?? false,
     });
+
+  // If the bucket doesn't exist yet, attempt to initialize it and retry once
+  if (error && (error.message.includes("does not exist") || error.message.includes("not found"))) {
+    await ensureStorageBucketsExist();
+    const retry = await client.storage
+      .from(bucket)
+      .createSignedUploadUrl(path, {
+        upsert: options.upsert ?? false,
+      });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error || !data) {
     throw new AppError(
@@ -176,12 +225,25 @@ export async function uploadFile(
 ): Promise<{ path: string; id?: string }> {
   const client = getSupabaseClient();
 
-  const { data, error } = await client.storage
+  let { data, error } = await client.storage
     .from(bucket)
     .upload(path, fileBody, {
       contentType: options.contentType || "application/octet-stream",
       upsert: options.upsert ?? false,
     });
+
+  // If the bucket doesn't exist yet, attempt to initialize it and retry once
+  if (error && (error.message.includes("does not exist") || error.message.includes("not found"))) {
+    await ensureStorageBucketsExist();
+    const retry = await client.storage
+      .from(bucket)
+      .upload(path, fileBody, {
+        contentType: options.contentType || "application/octet-stream",
+        upsert: options.upsert ?? false,
+      });
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error || !data) {
     throw new AppError(

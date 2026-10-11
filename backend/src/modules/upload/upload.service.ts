@@ -47,25 +47,21 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
   // Server-controlled destination path
   const storageKey = storageService.generateRawVideoKey(channel.id, uploadId, safeFileName);
 
-  let uploadUrl = "";
-  let uploadToken = "";
-
-  if (isStorageConfigured()) {
-    try {
-      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, storageKey, {
-        expiresInSeconds: 3600,
-      });
-      uploadUrl = signed.signedUrl;
-      uploadToken = signed.token;
-    } catch (err: any) {
-      console.warn("[Upload Service] Supabase signed URL warning:", err.message);
-      uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${storageKey}`;
-    }
-  } else {
-    uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${storageKey}`;
+  if (!isStorageConfigured()) {
+    throw new AppError(
+      "Storage service is not configured. Please verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.",
+      500,
+      "STORAGE_NOT_CONFIGURED",
+    );
   }
 
-  // Create Upload record with initial UPLOADING status
+  // Generate signed upload URL from Supabase BEFORE creating the database record.
+  // If signed URL generation fails, propagate the error without leaving an orphaned Upload record.
+  const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, storageKey, {
+    expiresInSeconds: 3600,
+  });
+
+  // Create Upload record with initial UPLOADING status only after URL is successfully generated
   const upload = await Upload.create({
     id: uploadId,
     channelId: channel.id,
@@ -82,10 +78,10 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
     visibility: upload.visibility,
     processingStatus: upload.processingStatus,
     uploadSession: {
-      uploadUrl,
+      uploadUrl: signed.signedUrl,
       key: storageKey,
       bucket: STORAGE_RAW_BUCKET,
-      token: uploadToken,
+      token: signed.token,
       method: "PUT",
       headers: {
         "Content-Type": contentType,
@@ -108,7 +104,16 @@ export async function createPresignedUrl(input: PresignedUrlInput, userId: strin
     throw new AppError("You must create a channel before uploading videos.", 400, "NO_CHANNEL");
   }
 
+  if (!isStorageConfigured()) {
+    throw new AppError(
+      "Storage service is not configured. Please verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      500,
+      "STORAGE_NOT_CONFIGURED",
+    );
+  }
+
   let uploadId = data.uploadId;
+  let isNewUpload = false;
 
   if (uploadId) {
     // Renew / obtain upload permission for existing record
@@ -132,8 +137,19 @@ export async function createPresignedUrl(input: PresignedUrlInput, userId: strin
       );
     }
   } else {
-    // Create new upload record
     uploadId = crypto.randomUUID();
+    isNewUpload = true;
+  }
+
+  const key = storageService.generateRawVideoKey(channel.id, uploadId, data.fileName);
+
+  // Generate signed upload URL from Supabase BEFORE creating new DB record
+  const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, key, {
+    expiresInSeconds: 3600,
+  });
+
+  // If this is a new upload session, create the DB record only after URL generation succeeds
+  if (isNewUpload) {
     await Upload.create({
       id: uploadId,
       channelId: channel.id,
@@ -143,32 +159,12 @@ export async function createPresignedUrl(input: PresignedUrlInput, userId: strin
     });
   }
 
-  const key = storageService.generateRawVideoKey(channel.id, uploadId, data.fileName);
-
-  let uploadUrl = "";
-  let uploadToken = "";
-
-  if (isStorageConfigured()) {
-    try {
-      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, key, {
-        expiresInSeconds: 3600,
-      });
-      uploadUrl = signed.signedUrl;
-      uploadToken = signed.token;
-    } catch (err: any) {
-      console.warn("[Upload Service] Signed URL generation warning:", err.message);
-      uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
-    }
-  } else {
-    uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
-  }
-
   return {
     uploadId,
-    uploadUrl,
+    uploadUrl: signed.signedUrl,
     key,
     bucket: STORAGE_RAW_BUCKET,
-    token: uploadToken,
+    token: signed.token,
     method: "PUT",
     headers: {
       "Content-Type": data.contentType,
@@ -341,6 +337,15 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
   }
 
   // Idempotency check: Do not re-enqueue duplicate jobs if already processing or finished
+  if (upload.processingStatus === "COMPLETED") {
+    return {
+      uploadId: upload.id,
+      status: upload.processingStatus,
+      message: "Upload has already completed processing.",
+      alreadyCompleted: true,
+    };
+  }
+
   if (upload.processingStatus === "TRANSCODING") {
     return {
       uploadId: upload.id,
@@ -350,13 +355,32 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     };
   }
 
-  if (upload.processingStatus === "COMPLETED") {
-    return {
-      uploadId: upload.id,
-      status: upload.processingStatus,
-      message: "Upload has already completed processing.",
-      alreadyCompleted: true,
-    };
+  // Check BullMQ for active or waiting job to ensure idempotency across rapid duplicate calls
+  try {
+    const existingJob = await getTranscodeJobByUploadId(uploadId);
+    if (existingJob) {
+      const state = await existingJob.getState();
+      if (state === "waiting" || state === "active" || state === "delayed") {
+        return {
+          uploadId: upload.id,
+          status: upload.processingStatus,
+          jobId: existingJob.id,
+          message:
+            state === "active"
+              ? "Upload is actively being transcoded."
+              : "Upload is already queued for transcoding.",
+          alreadyProcessing: true,
+        };
+      }
+    }
+  } catch {
+    // Non-fatal if queue check fails
+  }
+
+  // If retrying a previously failed upload, reset processingStatus to UPLOADING
+  if (upload.processingStatus === "FAILED") {
+    await Upload.where({ id: uploadId }).update({ processingStatus: "UPLOADING" });
+    upload.processingStatus = "UPLOADING";
   }
 
   // Enforce server-controlled storage path prefix
@@ -371,63 +395,58 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
 
   let verifiedStorageKey = storageKey || `${expectedFolder}/source_video.mp4`;
 
-  // Verify object existence and size in Supabase Storage if configured
-  if (isStorageConfigured()) {
-    try {
-      const files = await storageService.listFiles(STORAGE_RAW_BUCKET, expectedFolder);
-
-      if (!files || files.length === 0) {
-        throw new AppError(
-          "No uploaded video found in storage for this session. Please complete the file upload before finalizing.",
-          400,
-          "MEDIA_NOT_FOUND",
-        );
-      }
-
-      // Identify the uploaded file
-      const mediaFile = files[0];
-      if (!mediaFile) {
-        throw new AppError("No file found in upload session folder.", 400, "MEDIA_NOT_FOUND");
-      }
-      verifiedStorageKey = `${expectedFolder}/${mediaFile.name}`;
-
-      const rawSizeBytes = (mediaFile as any).metadata?.size || 0;
-      if (rawSizeBytes > MAX_UPLOAD_SIZE_BYTES) {
-        // Enforce maximum size: clean up oversized object and mark failed
-        await storageService.deleteFiles(STORAGE_RAW_BUCKET, [verifiedStorageKey]);
-        await Upload.where({ id: uploadId }).update({ processingStatus: "FAILED" });
-        throw new AppError(
-          `Uploaded video (${Math.round(rawSizeBytes / (1024 * 1024))} MB) exceeds maximum allowed limit.`,
-          413,
-          "FILE_TOO_LARGE",
-        );
-      }
-    } catch (err: any) {
-      if (err instanceof AppError) throw err;
-      console.warn("[Upload Service] Storage verification notice:", err.message);
-    }
+  // Verify object existence and size in Supabase Storage
+  if (!isStorageConfigured()) {
+    throw new AppError(
+      "Storage service is not configured. Please verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      500,
+      "STORAGE_NOT_CONFIGURED",
+    );
   }
 
-  // Transition status to TRANSCODING
-  const updated = await Upload.where({ id: uploadId }).update({
-    processingStatus: "TRANSCODING",
-  });
+  const files = await storageService.listFiles(STORAGE_RAW_BUCKET, expectedFolder);
 
-  if (!updated) {
-    throw new AppError("Failed to transition upload state to TRANSCODING.", 500);
+  if (!files || files.length === 0) {
+    throw new AppError(
+      "No uploaded video found in storage for this session. Please complete the file upload before finalizing.",
+      400,
+      "MEDIA_NOT_FOUND",
+    );
   }
+
+  // Identify the uploaded file
+  const mediaFile = files[0];
+  if (!mediaFile) {
+    throw new AppError("No file found in upload session folder.", 400, "MEDIA_NOT_FOUND");
+  }
+  verifiedStorageKey = `${expectedFolder}/${mediaFile.name}`;
+
+  const rawSizeBytes = (mediaFile as any).metadata?.size || 0;
+  if (rawSizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+    // Enforce maximum size: clean up oversized object and mark failed
+    await storageService.deleteFiles(STORAGE_RAW_BUCKET, [verifiedStorageKey]);
+    await Upload.where({ id: uploadId }).update({ processingStatus: "FAILED" });
+    throw new AppError(
+      `Uploaded video (${Math.round(rawSizeBytes / (1024 * 1024))} MB) exceeds maximum allowed limit.`,
+      413,
+      "FILE_TOO_LARGE",
+    );
+  }
+
+  // Note: Status remains UPLOADING while waiting in BullMQ queue.
+  // The worker process will transition state to TRANSCODING when it actively begins processing.
 
   // Enqueue background transcoding job into BullMQ
   const job = await enqueueTranscodeJob({
-    uploadId: updated.id,
+    uploadId: upload.id,
     channelId: upload.channel.id,
     rawVideoKey: verifiedStorageKey,
     title: upload.title,
   });
 
   return {
-    uploadId: updated.id,
-    status: updated.processingStatus,
+    uploadId: upload.id,
+    status: upload.processingStatus,
     jobId: job ? job.id : null,
     message: "Raw upload verified successfully and queued for transcoding.",
   };

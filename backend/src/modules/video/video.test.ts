@@ -20,8 +20,8 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
     description: "An adaptive bitrate video",
     processingStatus: "COMPLETED",
     visibility: "PUBLIC",
-    hlsManifestUrl: "https://storage.vion.local/processed-videos/processed/chan_owner_1/upl_completed_pub/hls/master.m3u8",
-    thumbnailUrl: "https://storage.vion.local/thumbnails/chan_owner_1/upl_completed_pub/default.jpg",
+    hlsManifestUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_pub/hls/master.m3u8",
+    thumbnailUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/thumbnails/thumbnails/chan_owner_1/upl_completed_pub/default.jpg",
     viewCount: 10,
     isDeleted: false,
     channel: {
@@ -32,8 +32,8 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
       profilePictureUrl: null,
     },
     videos: [
-      { id: "v_1080", resolution: "1080p", url: "https://storage.vion.local/.../1080p/index.m3u8" },
-      { id: "v_720", resolution: "720p", url: "https://storage.vion.local/.../720p/index.m3u8" },
+      { id: "v_1080", resolution: "1080p", url: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_pub/hls/1080p/index.m3u8" },
+      { id: "v_720", resolution: "720p", url: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_pub/hls/720p/index.m3u8" },
     ],
     comments: [],
     interactions: [],
@@ -69,8 +69,8 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
     description: "Private video for owner only",
     processingStatus: "COMPLETED",
     visibility: "PRIVATE",
-    hlsManifestUrl: "https://storage.vion.local/processed-videos/processed/chan_owner_1/upl_completed_priv/hls/master.m3u8",
-    thumbnailUrl: "https://storage.vion.local/thumbnails/chan_owner_1/upl_completed_priv/default.jpg",
+    hlsManifestUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_priv/hls/master.m3u8",
+    thumbnailUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/thumbnails/thumbnails/chan_owner_1/upl_completed_priv/default.jpg",
     viewCount: 5,
     isDeleted: false,
     channel: {
@@ -81,7 +81,7 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
       profilePictureUrl: null,
     },
     videos: [
-      { id: "v_720", resolution: "720p", url: "https://storage.vion.local/.../720p/index.m3u8" },
+      { id: "v_720", resolution: "720p", url: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_priv/hls/720p/index.m3u8" },
     ],
     comments: [],
     interactions: [],
@@ -94,8 +94,8 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
     description: "Accessible via direct link",
     processingStatus: "COMPLETED",
     visibility: "UNLISTED",
-    hlsManifestUrl: "https://storage.vion.local/processed-videos/processed/chan_owner_1/upl_completed_unlisted/hls/master.m3u8",
-    thumbnailUrl: "https://storage.vion.local/thumbnails/chan_owner_1/upl_completed_unlisted/default.jpg",
+    hlsManifestUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/processed-videos/processed/chan_owner_1/upl_completed_unlisted/hls/master.m3u8",
+    thumbnailUrl: "https://nnenbfpjtggrhamveeiw.supabase.co/storage/v1/object/public/thumbnails/thumbnails/chan_owner_1/upl_completed_unlisted/default.jpg",
     viewCount: 20,
     isDeleted: false,
     channel: {

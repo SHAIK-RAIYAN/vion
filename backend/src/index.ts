@@ -1,3 +1,4 @@
+import "temporal-polyfill/global";
 import express from "express";
 import { FRONTEND_URL, NODE_ENV, PORT } from "./config/config";
 import { db } from "./prisma/db";
@@ -50,6 +51,23 @@ export const server = app.listen(PORT, async () => {
     console.log("[Vion Server] Connected to Neon PostgreSQL database");
   } catch (err: any) {
     console.error("[Vion Server] Database connection warning:", err?.message || err);
+  }
+  try {
+    const { ensureStorageBucketsExist } = await import("./services/storageService");
+    await ensureStorageBucketsExist();
+  } catch (err: any) {
+    console.warn("[Vion Server] Storage initialization notice:", err?.message || err);
+  }
+
+  // Optional embedded worker for development environments when enabled
+  if (process.env.ENABLE_WORKER === "true" || process.env.RUN_WORKER === "true") {
+    try {
+      const { createTranscodingWorker } = await import("./worker/transcodingWorker");
+      createTranscodingWorker();
+      console.log("[Vion Server] Embedded transcoding worker started (ENABLE_WORKER=true).");
+    } catch (err: any) {
+      console.warn("[Vion Server] Failed to initialize embedded worker:", err?.message || err);
+    }
   }
 });
 

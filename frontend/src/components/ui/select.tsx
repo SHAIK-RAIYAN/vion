@@ -1,9 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { animateDropdownIn } from "@/lib/gsap";
 
 interface SelectContextValue {
   value: string;
@@ -136,25 +136,25 @@ export function SelectContent({
     };
   }, [ctx]);
 
+  useEffect(() => {
+    if (ctx.open && contentRef.current) {
+      animateDropdownIn(contentRef.current);
+    }
+  }, [ctx.open]);
+
+  if (!ctx.open) return null;
+
   return (
-    <AnimatePresence>
-      {ctx.open && (
-        <motion.div
-          ref={contentRef}
-          initial={{ opacity: 0, scale: 0.96, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: -4 }}
-          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-          className={cn(
-            "absolute z-50 mt-1 min-w-[8rem] w-full overflow-hidden rounded-xl border border-border bg-card p-1 text-foreground shadow-xl",
-            align === "end" ? "right-0" : "left-0",
-            className,
-          )}
-        >
-          <div className="max-h-60 overflow-y-auto space-y-0.5">{children}</div>
-        </motion.div>
+    <div
+      ref={contentRef}
+      className={cn(
+        "absolute z-50 mt-1 min-w-[8rem] w-full overflow-hidden rounded-xl border border-border bg-card p-1 text-foreground shadow-xl",
+        align === "end" ? "right-0" : "left-0",
+        className,
       )}
-    </AnimatePresence>
+    >
+      <div className="max-h-60 overflow-y-auto space-y-0.5">{children}</div>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { describe, it, expect, beforeEach, mock, spyOn } from "bun:test";
 import {
   createUploadSchema,
   presignedUrlSchema,
@@ -106,11 +106,11 @@ describe("Upload Module Safety & Validation", () => {
 
     it("allows approved video CDN domains", async () => {
       const result = await validateRemoteVideoUrl(
-        "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720p/Big_Buck_Bunny_720_10s_1MB.mp4",
+        "https://raw.githubusercontent.com/media/sample.mp4",
       );
-      expect(result.hostname).toBe("test-videos.co.uk");
+      expect(result.hostname).toBe("raw.githubusercontent.com");
       expect(result.contentType).toBe("video/mp4");
-    });
+    }, 15000);
   });
 
   describe("Upload Lifecycle & Business Logic", () => {
@@ -221,6 +221,38 @@ describe("Upload Module Safety & Validation", () => {
         expect(result.alreadyCompleted).toBe(true);
       } finally {
         (db.orm.public.Upload as any).where = originalWhere;
+      }
+    });
+
+    it("preserves UPLOADING status upon enqueuing and does not prematurely set TRANSCODING", async () => {
+      const uploadingMock = {
+        ...mockUpload,
+        processingStatus: "UPLOADING",
+      };
+
+      const originalWhere = db.orm.public.Upload.where;
+      let updatedStatus: string | null = null;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          first: async () => uploadingMock,
+        }),
+        update: async (data: any) => {
+          if (data.processingStatus) updatedStatus = data.processingStatus;
+          return { ...uploadingMock, ...data };
+        },
+      });
+
+      const listSpy = spyOn(storageService, "listFiles").mockImplementation(async () => [
+        { name: "source_video.mp4", metadata: { size: 1024 * 1024 } } as any,
+      ]);
+
+      try {
+        const result = await uploadService.finalizeUpload("upl_123", "user_owner_1");
+        expect(result.status).toBe("UPLOADING");
+        expect(updatedStatus).toBeNull();
+      } finally {
+        (db.orm.public.Upload as any).where = originalWhere;
+        listSpy.mockRestore();
       }
     });
   });

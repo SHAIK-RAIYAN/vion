@@ -498,23 +498,21 @@ export async function uploadHlsAssetsToStorage(
 
     // 2. Upload rendition playlist
     const playlistKey = `${renditionPrefix}/index.m3u8`;
-    let playlistUrl = "";
 
-    if (isStorageConfigured()) {
-      try {
-        const buffer = fs.readFileSync(playlistPath);
-        await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, playlistKey, buffer, {
-          contentType: "application/vnd.apple.mpegurl",
-          upsert: true,
-        });
-        playlistUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, playlistKey);
-      } catch (uploadErr: any) {
-        console.warn(`[Transcoding Service] Storage upload warning for ${playlistKey}: ${uploadErr.message}`);
-        playlistUrl = `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${playlistKey}`;
-      }
-    } else {
-      playlistUrl = `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${playlistKey}`;
+    if (!isStorageConfigured()) {
+      throw new AppError(
+        "Storage service is not configured for video transcoding output.",
+        500,
+        "STORAGE_NOT_CONFIGURED",
+      );
     }
+
+    const buffer = fs.readFileSync(playlistPath);
+    await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, playlistKey, buffer, {
+      contentType: "application/vnd.apple.mpegurl",
+      upsert: true,
+    });
+    const playlistUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, playlistKey);
 
     item.publicUrl = playlistUrl;
     renditionUrls.push({
@@ -527,23 +525,13 @@ export async function uploadHlsAssetsToStorage(
   // 3. Upload master playlist last
   const masterKey = `${basePrefix}/master.m3u8`;
   const masterPath = path.join(outputDir, "master.m3u8");
-  let masterManifestUrl = "";
 
-  if (isStorageConfigured()) {
-    try {
-      const buffer = fs.readFileSync(masterPath);
-      await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, masterKey, buffer, {
-        contentType: "application/vnd.apple.mpegurl",
-        upsert: true,
-      });
-      masterManifestUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, masterKey);
-    } catch (uploadErr: any) {
-      console.warn(`[Transcoding Service] Master upload warning for ${masterKey}: ${uploadErr.message}`);
-      masterManifestUrl = `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${masterKey}`;
-    }
-  } else {
-    masterManifestUrl = `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${masterKey}`;
-  }
+  const masterBuffer = fs.readFileSync(masterPath);
+  await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, masterKey, masterBuffer, {
+    contentType: "application/vnd.apple.mpegurl",
+    upsert: true,
+  });
+  const masterManifestUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, masterKey);
 
   return {
     masterManifestUrl,

@@ -289,34 +289,25 @@ export async function getThumbnailPresignedUrl(
     throw new AppError("Unauthorized.", 403);
   }
 
-  const key = storageService.generateThumbnailKey(video.channel.id, videoId, input.fileName);
-  let uploadUrl = "";
-  let uploadToken = "";
-
-  if (isStorageConfigured()) {
-    try {
-      const signed = await storageService.createSignedUploadUrl(STORAGE_THUMBNAILS_BUCKET, key);
-      uploadUrl = signed.signedUrl;
-      uploadToken = signed.token;
-    } catch (err: any) {
-      console.warn("Supabase Storage thumbnail signed URL warning:", err.message);
-      uploadUrl = `https://storage.vion.local/${STORAGE_THUMBNAILS_BUCKET}/${key}`;
-    }
-  } else {
-    uploadUrl = `https://storage.vion.local/${STORAGE_THUMBNAILS_BUCKET}/${key}`;
+  if (!isStorageConfigured()) {
+    throw new AppError(
+      "Storage service is not configured. Please verify SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      500,
+      "STORAGE_NOT_CONFIGURED",
+    );
   }
 
-  const publicUrl = isStorageConfigured()
-    ? storageService.getPublicUrl(STORAGE_THUMBNAILS_BUCKET, key)
-    : uploadUrl;
+  const key = storageService.generateThumbnailKey(video.channel.id, videoId, input.fileName);
+  const signed = await storageService.createSignedUploadUrl(STORAGE_THUMBNAILS_BUCKET, key);
+  const publicUrl = storageService.getPublicUrl(STORAGE_THUMBNAILS_BUCKET, key);
 
   return {
     videoId,
-    uploadUrl,
+    uploadUrl: signed.signedUrl,
     publicUrl,
     key,
     bucket: STORAGE_THUMBNAILS_BUCKET,
-    token: uploadToken,
+    token: signed.token,
     headers: { "Content-Type": input.contentType },
   };
 }

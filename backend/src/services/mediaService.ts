@@ -354,23 +354,21 @@ export async function makeThumbnails(
 
       // 5. Upload candidate frame to Supabase Storage
       const storageKey = `thumbnails/${channelId}/${uploadId}/${candidateFileName}`;
-      let publicUrl = "";
 
-      if (isStorageConfigured()) {
-        try {
-          const fileBuffer = fs.readFileSync(candidateLocalPath);
-          await storageService.uploadFile(STORAGE_THUMBNAILS_BUCKET, storageKey, fileBuffer, {
-            contentType: "image/jpeg",
-            upsert: true,
-          });
-          publicUrl = storageService.getPublicUrl(STORAGE_THUMBNAILS_BUCKET, storageKey);
-        } catch (uploadErr: any) {
-          console.warn(`[Media Service] Storage upload notice for ${storageKey}: ${uploadErr.message}`);
-          publicUrl = `https://storage.vion.local/${STORAGE_THUMBNAILS_BUCKET}/${storageKey}`;
-        }
-      } else {
-        publicUrl = `https://storage.vion.local/${STORAGE_THUMBNAILS_BUCKET}/${storageKey}`;
+      if (!isStorageConfigured()) {
+        throw new AppError(
+          "Storage service is not configured for thumbnail generation.",
+          500,
+          "STORAGE_NOT_CONFIGURED",
+        );
       }
+
+      const fileBuffer = fs.readFileSync(candidateLocalPath);
+      await storageService.uploadFile(STORAGE_THUMBNAILS_BUCKET, storageKey, fileBuffer, {
+        contentType: "image/jpeg",
+        upsert: true,
+      });
+      const publicUrl = storageService.getPublicUrl(STORAGE_THUMBNAILS_BUCKET, storageKey);
 
       candidateResults.push({
         index: i + 1,

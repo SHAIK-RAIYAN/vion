@@ -164,27 +164,30 @@ function SubscriptionsContent() {
             key={sub.id}
             className="flex flex-col justify-between p-4 rounded-xl border border-border bg-card shadow-2xs hover:border-border/80 transition-all"
           >
-            <div className="flex items-center gap-3 mb-3">
+            <Link
+              href={`/channel/${sub.channelId}`}
+              className="flex items-center gap-3 mb-3 group/chan cursor-pointer"
+            >
               {sub.channel.profilePictureUrl ? (
                 <img
                   src={sub.channel.profilePictureUrl}
                   alt={sub.channel.channelName}
-                  className="w-12 h-12 rounded-full object-cover border border-border"
+                  className="w-12 h-12 rounded-full object-cover border border-border group-hover/chan:opacity-90 transition-opacity"
                 />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-muted border border-border flex items-center justify-center text-sm font-bold uppercase text-foreground">
+                <div className="w-12 h-12 rounded-full bg-muted border border-border flex items-center justify-center text-sm font-bold uppercase text-foreground group-hover/chan:opacity-90 transition-opacity">
                   {sub.channel.channelName[0]}
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h4 className="font-semibold text-sm text-foreground truncate">
+                <h4 className="font-semibold text-sm text-foreground truncate group-hover/chan:text-[var(--brand)] transition-colors">
                   {sub.channel.channelName}
                 </h4>
                 <p className="text-xs text-muted-foreground truncate">
                   @{sub.channel.handle}
                 </p>
               </div>
-            </div>
+            </Link>
 
             {sub.channel.description && (
               <p className="text-xs text-muted-foreground line-clamp-2 mb-4">

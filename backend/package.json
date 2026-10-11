@@ -11,6 +11,7 @@
     "build": "bun build ./src/index.ts --outdir ./dist --target bun",
     "verify": "bun run src/verify.ts",
     "typecheck": "tsc --noEmit",
+    "test": "bun test --timeout 15000",
     "postinstall": "prisma skills sync || exit 0",
     "contract:emit": "prisma contract emit"
   },

@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Environment files & Secrets
 .env
@@ -22,3 +23,13 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+# Local test media assets
+videos/
+images/
+
+# Local agent configs
+.agents/
+skills-lock.json
+
+
+VION_CONTEXT_MASTER.md

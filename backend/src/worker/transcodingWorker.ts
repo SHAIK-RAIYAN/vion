@@ -162,21 +162,46 @@ export function createTranscodingWorker(): Worker<TranscodeJobData> {
   );
 
   worker.on("ready", () => {
-    console.info(`[Worker] Transcoding worker is ready and listening to queue '${VIDEO_TRANSCODE_QUEUE_NAME}'.`);
+    console.info(`[Worker] Transcoding worker is connected and ready. Listening on queue '${VIDEO_TRANSCODE_QUEUE_NAME}'.`);
   });
 
   worker.on("active", (job) => {
-    console.info(`[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Became active.`);
+    console.info(
+      `[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Picked up from queue and active (Attempt ${job.attemptsMade + 1}/${job.opts?.attempts || 3}).`,
+    );
+  });
+
+  worker.on("progress", (job, progress) => {
+    console.info(`[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Progress: ${progress}%`);
   });
 
   worker.on("completed", (job) => {
     console.info(`[Upload: ${job.data?.uploadId}] [Job: ${job.id}] Completed successfully.`);
   });
 
-  worker.on("failed", (job, err) => {
+  worker.on("failed", async (job, err) => {
+    const attemptsMade = job?.attemptsMade ?? 0;
+    const maxAttempts = job?.opts?.attempts ?? 3;
+    const willRetry = attemptsMade < maxAttempts;
     console.error(
-      `[Upload: ${job?.data?.uploadId}] [Job: ${job?.id}] Failed with error: ${err.message} (attempts made: ${job?.attemptsMade})`,
+      `[Upload: ${job?.data?.uploadId}] [Job: ${job?.id}] Failed on attempt ${attemptsMade}/${maxAttempts}: ${err.message}. Will retry: ${willRetry}`,
     );
+
+    // If max attempts reached, guarantee FAILED state is persisted in DB
+    if (!willRetry && job?.data?.uploadId) {
+      try {
+        await Upload.where({ id: job.data.uploadId }).update({
+          processingStatus: "FAILED",
+        });
+        console.info(`[Upload: ${job.data.uploadId}] Persisted terminal FAILED state in database.`);
+      } catch (dbErr: any) {
+        console.error(`[Upload: ${job.data.uploadId}] Error recording FAILED status in database:`, dbErr.message);
+      }
+    }
+  });
+
+  worker.on("stalled", (jobId) => {
+    console.warn(`[Worker Warning] Job '${jobId}' stalled. BullMQ will reassign or retry.`);
   });
 
   let lastWorkerErrTime = 0;
@@ -186,6 +211,10 @@ export function createTranscodingWorker(): Worker<TranscodeJobData> {
       lastWorkerErrTime = now;
       console.warn(`[Worker Warning] Worker encountered an error: ${err.message || "Connection issue"}`);
     }
+  });
+
+  worker.on("closed", () => {
+    console.info("[Worker] Transcoding worker closed.");
   });
 
   return worker;

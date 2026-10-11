@@ -23,7 +23,7 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
     userId: user1,
     handle: "creatorone",
     channelName: "Creator One Channel",
-    profilePictureUrl: "https://cdn.vion.local/avatar1.jpg",
+    profilePictureUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
     description: "Welcome to channel one",
   };
 
@@ -35,7 +35,7 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
     visibility: "PUBLIC",
     processingStatus: "COMPLETED",
     isDeleted: false,
-    thumbnailUrl: "https://cdn.vion.local/thumb.jpg",
+    thumbnailUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=500",
     channel: mockChannel,
     createdAt: "2026-10-11T10:00:00.000Z",
   };
@@ -268,6 +268,7 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
     it("creates a comment and validates content length and whitespace", async () => {
       const origUploadWhere = db.orm.public.Upload.where;
       const origCommentCreate = db.orm.public.Comment.create;
+      const origCommentWhere = db.orm.public.Comment.where;
 
       (db.orm.public.Upload as any).where = () => ({
         include: () => ({
@@ -279,6 +280,16 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
         id: "comm_1",
         ...data,
         createdAt: new Date().toISOString(),
+      });
+
+      (db.orm.public.Comment as any).where = () => ({
+        include: () => ({
+          first: async () => ({
+            id: "comm_1",
+            content: "Great technical explanation of adaptive streaming!",
+            createdAt: new Date().toISOString(),
+          }),
+        }),
       });
 
       try {
@@ -296,6 +307,7 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
       } finally {
         (db.orm.public.Upload as any).where = origUploadWhere;
         (db.orm.public.Comment as any).create = origCommentCreate;
+        (db.orm.public.Comment as any).where = origCommentWhere;
       }
     });
 
