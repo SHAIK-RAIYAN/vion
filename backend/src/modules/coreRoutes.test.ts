@@ -397,18 +397,18 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
           videoId: publicVideoId,
           progressTimeStamp: 120,
         });
-        expect(rec1.progressTimeStamp).toBe(120);
+        expect(rec1?.progressTimeStamp).toBe(120);
 
         // Update progress: 300 seconds (upsert)
         const rec2 = await watchHistoryService.recordProgress(user2, {
           videoId: publicVideoId,
           progressTimeStamp: 300,
         });
-        expect(rec2.progressTimeStamp).toBe(300);
+        expect(rec2?.progressTimeStamp).toBe(300);
 
         // Fetch progress
         const prog = await watchHistoryService.getVideoProgress(user2, publicVideoId);
-        expect(prog.progressTimeStamp).toBe(300);
+        expect(prog?.progressTimeStamp).toBe(300);
       } finally {
         (db.orm.public.Upload as any).where = origUploadWhere;
         (db.orm.public.WatchHistory as any).where = origHistWhere;
@@ -517,7 +517,7 @@ describe("Remaining Core Backend Routes & Database Behavior", () => {
       try {
         const feed = await feedService.getFeed({ page: 1, limit: 10, cursor: undefined });
         expect(feed.items.length).toBe(1);
-        expect(feed.items[0].visibility).toBe("PUBLIC");
+        expect(feed.items[0]?.visibility).toBe("PUBLIC");
       } finally {
         (db.orm.public.Upload as any).where = origUploadWhere;
       }

@@ -408,3 +408,265 @@ The core business domains are implemented against the fixed Prisma schema (`cont
 - **Safe Authorization**: Administration routes are guarded via server-configured `ADMIN_EMAILS`. If `ADMIN_EMAILS` is not configured or the caller's email is not in the list, access is rejected with `403 Forbidden` (`FORBIDDEN_ADMIN_ACCESS`). No fake schema checks are used.
 - **Categories & Notifications**: Categories provide platform taxonomy constants (`all`, `music`, `gaming`, `tech`, `education`, `entertainment`, `news`, `sports`, `podcasts`). Notifications endpoint returns valid schema-constrained empty collections, documenting that persistent notifications require a future database model.
 
+---
+
+## 🛠️ Complete Operational Runbook & Guide
+
+### 1. How to Start Vion Locally
+
+#### Prerequisites
+- **Bun**: v1.1+ installed locally.
+- **Docker**: For running the Redis container.
+- **FFmpeg & FFprobe**: Version 6+ installed and available in system `PATH` (verified working with FFmpeg 8.1.1).
+
+#### Step 1: Start Redis
+```bash
+docker compose up -d redis
+```
+Verify Redis is accepting connections:
+```bash
+docker compose exec redis redis-cli ping
+# Response: PONG
+```
+
+#### Step 2: Start the Express 5 API
+In a new terminal:
+```bash
+cd backend
+bun run dev
+```
+The API server starts on `http://localhost:5000` and automatically connects to Neon PostgreSQL.
+
+#### Step 3: Start the Transcoding Background Worker
+In a separate terminal:
+```bash
+cd backend
+bun run worker
+```
+The worker will verify Redis connectivity, validate Supabase Storage accessibility, and begin listening for `video-transcoding` queue jobs.
+
+#### Step 4: Start the Next.js Frontend
+In a third terminal:
+```bash
+cd frontend
+bun run dev
+```
+The frontend is available at `http://localhost:3000`.
+
+---
+
+### 2. How to Configure Supabase and Neon
+
+#### Neon Managed PostgreSQL
+1. Create a PostgreSQL project on [neon.tech](https://neon.tech).
+2. Copy the pooled connection string (e.g. `postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require`).
+3. Set in `backend/.env`:
+   ```env
+   DATABASE_URL="postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require"
+   ```
+4. **Prisma 8 RC Migration Note**:
+   - Vion uses `@prisma/orm-postgres/runtime` with compiled contract artifacts (`contract.json` & `contract.d.ts`).
+   - Run `bun run contract:emit` if you ever need to recompile the contract definition.
+   - Do **NOT** run destructive Prisma migrate commands (`prisma migrate reset` or `db push --force-reset`) against shared Neon databases.
+
+#### Supabase Storage
+1. Create a Supabase project at [supabase.com](https://supabase.com).
+2. In **Storage**, create three buckets:
+   - `raw-videos`: Set to **Private** (authenticated service-role only; raw uploads).
+   - `processed-videos`: Set to **Public** (public HLS playback delivery).
+   - `thumbnails`: Set to **Public** (public image poster delivery).
+3. Under **Project Settings > API**, copy the `Project URL` and `service_role` secret key.
+4. Set in `backend/.env`:
+   ```env
+   SUPABASE_URL="https://<your-project-ref>.supabase.co"
+   SUPABASE_SERVICE_ROLE_KEY="ey..."
+   SUPABASE_RAW_BUCKET="raw-videos"
+   SUPABASE_PROCESSED_BUCKET="processed-videos"
+   SUPABASE_THUMBNAILS_BUCKET="thumbnails"
+   ```
+   > ⚠️ **Security Warning**: `SUPABASE_SERVICE_ROLE_KEY` bypasses all Row Level Security. Never expose it to the browser, commit it to version control, or return it in API responses.
+
+---
+
+### 3. How to Upload a Video and Monitor its Status
+
+#### Step 1: Create an Upload Session
+Authenticate with the API to obtain a JWT cookie or Bearer token, then initialize the upload session:
+```bash
+curl -X POST http://localhost:5000/api/v1/uploads \
+  -H "Authorization: Bearer <USER_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channelId": "chan_mychannel",
+    "title": "My Awesome Video",
+    "description": "Adaptive HLS streaming demo",
+    "visibility": "PUBLIC",
+    "declaredSizeBytes": 18751434,
+    "declaredMimeType": "video/mp4"
+  }'
+```
+Response returns `uploadId` and `status: "PENDING"`.
+
+#### Step 2: Request a Direct Upload Capability (Signed PUT URL)
+```bash
+curl -X POST http://localhost:5000/api/v1/uploads/presigned-url \
+  -H "Authorization: Bearer <USER_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "uploadId": "<UPLOAD_ID>",
+    "fileName": "my-video.mp4",
+    "fileSizeBytes": 18751434,
+    "mimeType": "video/mp4"
+  }'
+```
+Response returns:
+- `uploadUrl`: Short-lived Supabase Storage signed upload URL.
+- `storageKey`: Server-controlled object key (e.g. `raw/<channelId>/<uploadId>/<uuid>_my-video.mp4`).
+
+#### Step 3: Direct Upload to Object Store
+Transfer raw bytes directly from the client to Supabase Storage:
+```bash
+curl -X PUT "<SIGNED_UPLOAD_URL>" \
+  -H "Content-Type: video/mp4" \
+  --data-binary "@./sample.mp4"
+```
+
+#### Step 4: Finalize the Upload
+Notify the backend that the byte transfer is complete. The backend validates the stored object exists, verifies ownership, and enqueues a transcoding job:
+```bash
+curl -X POST http://localhost:5000/api/v1/uploads/<UPLOAD_ID>/finalize \
+  -H "Authorization: Bearer <USER_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "storageKey": "raw/<channelId>/<uploadId>/<uuid>_my-video.mp4"
+  }'
+```
+The upload status advances to `TRANSCODING`.
+
+#### Step 5: Poll Status
+Monitor the background worker's progress:
+```bash
+curl -X GET http://localhost:5000/api/v1/uploads/<UPLOAD_ID>/status \
+  -H "Authorization: Bearer <USER_JWT>"
+```
+Response provides:
+```json
+{
+  "success": true,
+  "data": {
+    "uploadId": "<UPLOAD_ID>",
+    "databaseStatus": "COMPLETED",
+    "queueStatus": "completed",
+    "progressPercentage": 100,
+    "activeStage": "completed",
+    "hlsManifestUrl": "https://<supabase-url>/storage/v1/object/public/processed-videos/processed/<channelId>/<videoId>/hls/master.m3u8",
+    "thumbnailUrl": "https://<supabase-url>/storage/v1/object/public/thumbnails/thumbnails/<channelId>/<videoId>/candidate_1.jpg"
+  }
+}
+```
+
+---
+
+### 4. How to Inspect Generated Thumbnails and HLS Assets
+
+#### Local Temporary Inspection
+During transcoding, all operations occur in `backend/tmp/media/transcode_<uploadId>_<uuid>/`:
+- `source_input.mp4`: Local copy of raw video.
+- `master.m3u8`: Apple RFC 8216 master playlist.
+- `1080p/index.m3u8`, `720p/index.m3u8`, etc.: Variant playlists.
+- `1080p/segment_000.ts`, etc.: Individual MPEG-TS 6-second media segments.
+
+#### Supabase Storage Asset Layout
+Once transcoding completes, assets are uploaded to the following deterministic paths:
+```
+processed-videos/
+  └── processed/<channelId>/<videoId>/hls/
+        ├── master.m3u8
+        ├── 1080p/
+        │     ├── index.m3u8
+        │     ├── segment_000.ts
+        │     └── ...
+        ├── 720p/
+        │     ├── index.m3u8
+        │     └── ...
+        └── 360p/
+              └── ...
+
+thumbnails/
+  └── thumbnails/<channelId>/<videoId>/
+        ├── candidate_1.jpg
+        ├── candidate_2.jpg
+        └── candidate_3.jpg
+```
+
+#### Inspect Master Playlist
+Open `master.m3u8` in a text editor or via curl:
+```m3u8
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-INDEPENDENT-SEGMENTS
+
+#EXT-X-STREAM-INF:BANDWIDTH=5300000,AVERAGE-BANDWIDTH=5000000,RESOLUTION=1920x1080,FRAME-RATE=60.000,CODECS="avc1.64002a,mp4a.40.2"
+1080p/index.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=3128000,AVERAGE-BANDWIDTH=2800000,RESOLUTION=1280x720,FRAME-RATE=60.000,CODECS="avc1.4d401f,mp4a.40.2"
+720p/index.m3u8
+```
+
+---
+
+### 5. How to Test Playback and Visibility
+
+#### Public Videos
+Anyone can access details, manifest, and playback configuration:
+```bash
+# Get video metadata
+curl -X GET http://localhost:5000/api/v1/videos/<VIDEO_ID>
+
+# Get player playback configuration
+curl -X GET http://localhost:5000/api/v1/videos/<VIDEO_ID>/playback
+
+# Get master manifest URL directly
+curl -X GET http://localhost:5000/api/v1/videos/<VIDEO_ID>/manifest
+```
+
+#### Unlisted Videos
+Unlisted videos do not appear in feeds or search results, but anyone with the link can play them:
+```bash
+curl -X GET http://localhost:5000/api/v1/videos/<UNLISTED_VIDEO_ID>/playback
+# Returns 200 OK with streamType and manifest URL
+```
+
+#### Private Videos
+Private videos strictly reject unauthorized access:
+```bash
+# Unauthenticated request to private video
+curl -X GET http://localhost:5000/api/v1/videos/<PRIVATE_VIDEO_ID>/playback
+# Returns: 403 Forbidden ("You do not have permission to view this private video.")
+
+# Channel owner request to private video
+curl -X GET http://localhost:5000/api/v1/videos/<PRIVATE_VIDEO_ID>/playback \
+  -H "Authorization: Bearer <OWNER_JWT>"
+# Returns: 200 OK
+```
+
+#### Debounced View Counting
+When testing playback, note that the backend applies an in-memory 60-second sliding window per IP + video combination (`shouldIncrementView`). Rapid refreshes or polling requests (`?poll=true` / `x-polling: true`) do not trigger repeated database writes or artificially inflate view counts.
+
+---
+
+### 6. Known Limitations and Next Performance Improvements
+
+1. **HLS Private Content Delivery**:
+   - *Current Implementation*: Public Supabase Storage bucket URLs are delivered for public/unlisted videos. For private videos, the API guards access to metadata and manifest endpoints with `403 Forbidden`.
+   - *Limitation*: Because Supabase Storage uses simple public bucket policies for processed assets, if an authorized user copies and shares individual `.ts` segment URLs, the object store does not re-authenticate each segment request.
+   - *Next Improvement*: Implement Cloudflare Stream or AWS CloudFront Signed Cookies (`CloudFront-Signature` cookie) covering the master manifest and all child segment paths under `/processed/...`.
+
+2. **Sequential Transcoding per Job**:
+   - *Current Implementation*: The BullMQ worker transcodes eligible renditions (1080p, 720p, 480p, 360p) sequentially for a video to prevent GPU/CPU saturation on a single worker node.
+   - *Next Improvement*: For enterprise scale, adopt segment-level parallel chunk transcoding (e.g. splitting source into 10-second GOP chunks across a cluster of serverless workers and merging playlists).
+
+3. **In-Memory View Debouncing**:
+   - *Current Implementation*: Debouncing uses an in-memory `Map<string, number>` on the Express process.
+   - *Next Improvement*: Move cooldown state to Redis keys (`SET video:view:{videoId}:{clientKey} 1 EX 60 NX`) so multiple Express replicas share the same sliding window across horizontal scaling.
+

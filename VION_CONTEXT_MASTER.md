@@ -271,6 +271,30 @@ model Video {
   7. **Automated Test Suite**:
      - Added 15 new unit and integration tests in [`coreRoutes.test.ts`](./backend/src/modules/coreRoutes.test.ts). Total backend suite now passes 71 tests across 6 files.
 
+### Milestone 11: Video Backend Hardening & Real Media Verification
+- **Scope**: Comprehensive audit and operational hardening across Express API, BullMQ worker, storage paths, FFmpeg spawner, database queries, and CORS; end-to-end verification with a real local 1080p 60fps MP4 video fixture.
+- **Key Hardening Actions**:
+  1. **Server & CORS Hardening** ([`backend/src/index.ts`](./backend/src/index.ts)):
+     - Restricted CORS in production (`NODE_ENV === "production"`): rejects unauthorized origins with a strict CORS error, while maintaining permissive fallback during local development.
+     - Added graceful shutdown handlers on `SIGINT` and `SIGTERM` for the Express server to close HTTP listeners cleanly, terminate database connections (`db.disconnect()`), and force exit if in-flight requests exceed 10 seconds.
+     - Exported `app` and `server` for modular integration testing.
+  2. **TypeScript Null-Safety & Typecheck Resolution** ([`coreRoutes.test.ts`](./backend/src/modules/coreRoutes.test.ts)):
+     - Resolved TS18047 and TS2532 strict null-check warnings in test assertions via optional chaining (`rec1?.progressTimeStamp`, `feed.items[0]?.visibility`).
+     - `bun run typecheck` passes with zero errors.
+  3. **End-to-End Real Media Pipeline Verification** ([`backend/scripts/verify_real_fixture.ts`](./backend/scripts/verify_real_fixture.ts)):
+     - Verified end-to-end media pipeline against a real 1080p 60fps MP4 video (`videos/cat-smiling-in-the-water-moewalls-com.mp4`):
+       - Probed container headers, 1920x1080 resolution, 60fps framerate, and h264 codec using `readVideoInfo` (FFprobe).
+       - Extracted 3 high-quality JPEG thumbnails at 15%, 50%, and 85% timestamps using `makeThumbnails` (FFmpeg).
+       - Evaluated adaptive quality ladder anti-upscaling rules (`determineTargetRenditions` yielding 1080p, 720p, 480p, 360p).
+       - Transcoded HLS rendition with synchronized GOP keyframes and synthesized silent stereo audio track (`anullsrc`) via `encodeRenditionHls` (FFmpeg).
+       - Generated RFC 8216 / Apple compliant master playlist (`buildMasterPlaylist`).
+       - Validated entire HLS package integrity (`verifyHlsPackageLocal`) and cleaned up temporary scratch files.
+  4. **Operational Runbook & Guide**:
+     - Documented step-by-step local startup for Redis, API, Worker, and Frontend.
+     - Documented configuration for Neon PostgreSQL and Supabase Storage buckets (`raw-videos`, `processed-videos`, `thumbnails`).
+     - Documented video upload lifecycle, status monitoring, thumbnail & HLS asset inspection, and visibility testing.
+     - Documented known limitations and performance optimization roadmap.
+
 ---
 
 ## 📊 Complete API Contract Status Matrix (91 Endpoints)
@@ -461,8 +485,11 @@ bun run dev
 cd backend
 bun run typecheck
 
-# Run full backend test suite (42 tests)
+# Run full backend test suite (71 tests across 6 suites)
 bun test
+
+# Run real local media pipeline verification (FFprobe, FFmpeg, HLS, thumbnails)
+bun run scripts/verify_real_fixture.ts
 
 # Run 91-endpoint verification script
 bun run verify
