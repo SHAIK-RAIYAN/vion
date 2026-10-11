@@ -22,6 +22,8 @@ router.use("/auth", authRouter);
 router.use("/users", authMiddleware, userRouter);
 router.use("/channels", channelRouter);
 router.use("/uploads", uploadRouter);
+// Backward compatibility alias for legacy consumers during route migration
+router.use("/upload", uploadRouter);
 router.use("/videos", videoRouter);
 router.use("/comments", commentRouter);
 router.use("/history", watchHistoryRouter);

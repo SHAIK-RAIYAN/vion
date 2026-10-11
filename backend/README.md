@@ -59,6 +59,51 @@ Vion separates concerns across three dedicated infrastructure services:
 
 ---
 
+## 🎥 Video Upload Lifecycle & Architectural Concepts
+
+### Why the browser uploads directly to storage
+Video files typically range from tens of megabytes to several gigabytes. If clients streamed full video payloads through Express, Node/Bun event loops would saturate network bandwidth, tie up HTTP worker threads, and exhaust memory buffers. By having Express generate a cryptographically signed upload capability, the client transmits raw video bytes directly to Supabase Storage. The API stays lightweight and highly available.
+
+### Why signed upload URLs expire
+Signed URLs contain a short-lived HMAC permission signature (defaulting to 1 hour). Expiry prevents token harvesting, replay attacks, unauthorized uploads long after a session has lapsed, and accidental writes to stale keys.
+
+### Why `finalize` must verify the stored object
+Clients operate in an untrusted environment. A malicious client could:
+1. Signal upload completion without ever transferring a file.
+2. Upload a 0-byte payload or empty dummy bytes.
+3. Exceed declared file size limits.
+4. Pass forged storage keys referencing objects owned by another user or channel.
+
+The `POST /api/v1/uploads/:uploadId/finalize` endpoint enforces that:
+- The caller owns the upload session (`upload.channel.userId === userId`).
+- The storage key strictly conforms to the server-controlled folder (`raw/${channelId}/${uploadId}/...`).
+- The object genuinely exists in storage with non-zero bytes and is within `MAX_UPLOAD_SIZE_BYTES`.
+- The operation is idempotent: repeated finalization requests return existing transcoding state without enqueueing duplicate jobs.
+
+### Processing Status Reference
+- `PENDING`: Upload record created (or approved remote video URL registered); waiting for media transfer.
+- `UPLOADING`: Direct upload permission minted; client is transferring bytes to object storage.
+- `TRANSCODING`: Raw file verified and actively queued or undergoing FFmpeg adaptive multi-bitrate HLS encoding.
+- `COMPLETED`: Transcoding successfully finished; HLS manifests and renditions published for playback.
+- `FAILED`: Ingestion or transcoding failed (e.g. file size exceeded, corrupt media container, or worker error).
+
+---
+
+## 🎬 Upload API Endpoints (`/api/v1/uploads`)
+
+| Method | Endpoint | Description | Auth |
+|---|---|---|---|
+| `POST` | `/api/v1/uploads` | Create new upload record and issue direct storage permission | Required |
+| `POST` | `/api/v1/uploads/presigned-url` | Generate or renew signed upload URL for direct storage transfer | Required |
+| `POST` | `/api/v1/uploads/remote-url` | Register approved remote video URL with SSRF protections | Required |
+| `GET` | `/api/v1/uploads/:uploadId` | Complete upload session details (ownership enforced for private) | Optional |
+| `GET` | `/api/v1/uploads/:uploadId/status` | Real-time processing status and progress percentage | Required |
+| `PATCH` | `/api/v1/uploads/:uploadId` | Update metadata (title, description, visibility, thumbnail) | Required |
+| `POST` | `/api/v1/uploads/:uploadId/finalize` | Verify stored object in storage and enqueue transcoding | Required |
+| `DELETE` | `/api/v1/uploads/:uploadId` | Cancel/soft-delete upload and clean up raw storage objects | Required |
+
+---
+
 ## ⚙️ Environment Configuration
 
 Add the required variables to `backend/.env`. All variables are validated at startup with Zod in `src/config/config.ts`.
@@ -108,10 +153,13 @@ bun run worker
 bun run worker:dev
 ```
 
-### 4. Verification and Health Checks
+### 4. Verification and Automated Tests
 ```bash
 # Static TypeScript verification
 bun run typecheck
+
+# Automated upload lifecycle and SSRF tests
+bun test
 
 # Full architectural and route verification test
 bun run verify

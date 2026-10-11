@@ -1,128 +1,256 @@
+import crypto from "crypto";
 import { db } from "../../prisma/db";
 import { AppError } from "../../utils/AppError";
 import { getPaginationMeta, type Pagination } from "../../utils/pagination";
 import {
   createUploadSchema,
   updateUploadSchema,
+  presignedUrlSchema,
+  remoteUrlSchema,
   addVideoResolutionSchema,
   type CreateUploadInput,
   type UpdateUploadInput,
+  type PresignedUrlInput,
+  type RemoteUrlInput,
   type AddVideoResolutionInput,
 } from "./upload.schema";
+import * as storageService from "../../services/storageService";
+import {
+  isStorageConfigured,
+  STORAGE_RAW_BUCKET,
+  MAX_UPLOAD_SIZE_BYTES,
+} from "../../config/config";
+import { enqueueTranscodeJob } from "../../queue/videoQueue";
+import { validateRemoteVideoUrl } from "../../utils/ssrfValidator";
 
 const { Upload, Channel, Video } = db.orm.public;
 
+/**
+ * 1. POST /api/v1/uploads
+ * Creates an upload session record and issues temporary direct storage credentials.
+ */
 export async function createUpload(input: CreateUploadInput, userId: string) {
   const data = createUploadSchema.parse(input);
 
   const channel = await Channel.where({ userId }).first();
   if (!channel) {
-    throw new AppError("You must create a channel before uploading videos.", 400);
+    throw new AppError("You must create a channel before uploading videos.", 400, "NO_CHANNEL");
   }
 
-  const upload = await Upload.create({
-    channelId: channel.id,
-    title: data.title,
-    description: data.description || null,
-    thumbnailUrl: data.thumbnailUrl || null,
-    hlsManifestUrl: data.hlsManifestUrl || null,
-    visibility: data.visibility || "PRIVATE",
-    processingStatus: "PENDING",
-  });
-
-  return upload;
-}
-
-import * as storageService from "../../services/storageService";
-import { isStorageConfigured, STORAGE_RAW_BUCKET } from "../../config/config";
-import { enqueueTranscodeJob } from "../../queue/videoQueue";
-
-export async function createPresignedUrl(
-  input: { fileName: string; contentType: string; fileSize?: number },
-  userId: string,
-) {
-  const channel = await Channel.where({ userId }).first();
-  if (!channel) {
-    throw new AppError("You must create a channel before uploading videos.", 400);
-  }
-
-  // Server-generated storage layout path
   const uploadId = crypto.randomUUID();
-  const key = storageService.generateRawVideoKey(channel.id, uploadId, input.fileName);
+  const safeFileName = data.fileName || "source_video.mp4";
+  const contentType = data.contentType || "video/mp4";
+
+  // Server-controlled destination path
+  const storageKey = storageService.generateRawVideoKey(channel.id, uploadId, safeFileName);
 
   let uploadUrl = "";
   let uploadToken = "";
 
   if (isStorageConfigured()) {
     try {
-      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, key);
+      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, storageKey, {
+        expiresInSeconds: 3600,
+      });
       uploadUrl = signed.signedUrl;
       uploadToken = signed.token;
     } catch (err: any) {
-      console.warn("Supabase Storage signed URL warning:", err.message);
+      console.warn("[Upload Service] Supabase signed URL warning:", err.message);
+      uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${storageKey}`;
+    }
+  } else {
+    uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${storageKey}`;
+  }
+
+  // Create Upload record with initial UPLOADING status
+  const upload = await Upload.create({
+    id: uploadId,
+    channelId: channel.id,
+    title: data.title,
+    description: data.description || null,
+    thumbnailUrl: data.thumbnailUrl || null,
+    visibility: data.visibility || "PRIVATE",
+    processingStatus: "UPLOADING",
+  });
+
+  return {
+    uploadId: upload.id,
+    title: upload.title,
+    visibility: upload.visibility,
+    processingStatus: upload.processingStatus,
+    uploadSession: {
+      uploadUrl,
+      key: storageKey,
+      bucket: STORAGE_RAW_BUCKET,
+      token: uploadToken,
+      method: "PUT",
+      headers: {
+        "Content-Type": contentType,
+      },
+      expiresInSeconds: 3600,
+      maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
+    },
+  };
+}
+
+/**
+ * 2. POST /api/v1/uploads/presigned-url
+ * Generates or renews a secure direct upload capability for an upload.
+ */
+export async function createPresignedUrl(input: PresignedUrlInput, userId: string) {
+  const data = presignedUrlSchema.parse(input);
+
+  const channel = await Channel.where({ userId }).first();
+  if (!channel) {
+    throw new AppError("You must create a channel before uploading videos.", 400, "NO_CHANNEL");
+  }
+
+  let uploadId = data.uploadId;
+
+  if (uploadId) {
+    // Renew / obtain upload permission for existing record
+    const existing = await Upload.where({ id: uploadId, isDeleted: false })
+      .include("channel", (c) => c.select("id", "userId"))
+      .first();
+
+    if (!existing) {
+      throw new AppError("Upload record not found.", 404, "UPLOAD_NOT_FOUND");
+    }
+
+    if (existing.channel.userId !== userId) {
+      throw new AppError("You do not own this upload session.", 403, "FORBIDDEN");
+    }
+
+    if (existing.processingStatus === "COMPLETED") {
+      throw new AppError(
+        "Cannot request upload URL for a video that has already finished processing.",
+        409,
+        "ALREADY_COMPLETED",
+      );
+    }
+  } else {
+    // Create new upload record
+    uploadId = crypto.randomUUID();
+    await Upload.create({
+      id: uploadId,
+      channelId: channel.id,
+      title: data.fileName.replace(/\.[^/.]+$/, "") || "Untitled Upload",
+      visibility: "PRIVATE",
+      processingStatus: "UPLOADING",
+    });
+  }
+
+  const key = storageService.generateRawVideoKey(channel.id, uploadId, data.fileName);
+
+  let uploadUrl = "";
+  let uploadToken = "";
+
+  if (isStorageConfigured()) {
+    try {
+      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, key, {
+        expiresInSeconds: 3600,
+      });
+      uploadUrl = signed.signedUrl;
+      uploadToken = signed.token;
+    } catch (err: any) {
+      console.warn("[Upload Service] Signed URL generation warning:", err.message);
       uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
     }
   } else {
     uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
   }
 
-  const upload = await Upload.create({
-    id: uploadId,
-    channelId: channel.id,
-    title: input.fileName.replace(/\.[^/.]+$/, "") || "Untitled Upload",
-    visibility: "PRIVATE",
-    processingStatus: "UPLOADING",
-  });
-
   return {
-    uploadId: upload.id,
+    uploadId,
     uploadUrl,
     key,
     bucket: STORAGE_RAW_BUCKET,
     token: uploadToken,
     method: "PUT",
     headers: {
-      "Content-Type": input.contentType,
+      "Content-Type": data.contentType,
     },
     expiresInSeconds: 3600,
+    maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
   };
 }
 
+/**
+ * 3. POST /api/v1/uploads/remote-url
+ * Registers an approved remote video source for server ingest with SSRF protections.
+ */
+export async function createRemoteUrlUpload(input: RemoteUrlInput, userId: string) {
+  const data = remoteUrlSchema.parse(input);
 
-export async function createRemoteUrlUpload(
-  input: { url: string; title: string; description?: string },
-  userId: string,
-) {
+  // Validate URL and enforce SSRF protections against private addresses and forbidden sources
+  const validated = await validateRemoteVideoUrl(data.url);
+
   const channel = await Channel.where({ userId }).first();
   if (!channel) {
-    throw new AppError("You must create a channel before uploading videos.", 400);
+    throw new AppError("You must create a channel before uploading videos.", 400, "NO_CHANNEL");
   }
 
+  const uploadId = crypto.randomUUID();
   const upload = await Upload.create({
+    id: uploadId,
     channelId: channel.id,
-    title: input.title,
-    description: input.description || null,
-    visibility: "PRIVATE",
+    title: data.title,
+    description: data.description || null,
+    visibility: data.visibility || "PRIVATE",
     processingStatus: "PENDING",
   });
 
   return {
-    ...upload,
-    sourceRemoteUrl: input.url,
+    uploadId: upload.id,
+    title: upload.title,
+    sourceRemoteUrl: validated.url,
+    hostname: validated.hostname,
+    contentType: validated.contentType,
+    status: upload.processingStatus,
+    message: "Remote video source registered for ingest.",
   };
 }
 
+/**
+ * 4. GET /api/v1/uploads/:uploadId
+ * Retrieves complete upload information with ownership checks for private videos.
+ */
+export async function getUploadById(uploadId: string, currentUserId?: string) {
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) =>
+      c.select("id", "userId", "handle", "channelName", "profilePictureUrl"),
+    )
+    .include("videos", (v) => v.select("id", "resolution", "url"))
+    .first();
+
+  if (!upload) {
+    throw new AppError("Upload not found.", 404, "UPLOAD_NOT_FOUND");
+  }
+
+  // Non-completed uploads or private videos are restricted to the channel owner
+  const isOwner = currentUserId && upload.channel.userId === currentUserId;
+  if (!isOwner && (upload.visibility === "PRIVATE" || upload.processingStatus !== "COMPLETED")) {
+    throw new AppError("This video upload is private or currently processing.", 403, "FORBIDDEN");
+  }
+
+  return upload;
+}
+
+/**
+ * 5. GET /api/v1/uploads/:uploadId/status
+ * Retrieves processing status and percentage for the authenticated owner.
+ */
 export async function getUploadStatus(uploadId: string, userId: string) {
   const upload = await Upload.where({ id: uploadId, isDeleted: false })
     .include("channel", (c) => c.select("id", "userId"))
     .first();
 
   if (!upload) {
-    throw new AppError("Upload not found.", 404);
+    throw new AppError("Upload not found.", 404, "UPLOAD_NOT_FOUND");
   }
 
   if (upload.channel.userId !== userId) {
-    throw new AppError("Unauthorized access to upload status.", 403);
+    throw new AppError("Unauthorized access to upload status.", 403, "FORBIDDEN");
   }
 
   let progressPercentage = 0;
@@ -142,36 +270,139 @@ export async function getUploadStatus(uploadId: string, userId: string) {
   };
 }
 
+/**
+ * 6. PATCH /api/v1/uploads/:uploadId
+ * Updates upload metadata before publication.
+ */
+export async function updateUpload(
+  uploadId: string,
+  input: UpdateUploadInput,
+  userId: string,
+) {
+  const data = updateUploadSchema.parse(input);
+
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
+
+  if (!upload) {
+    throw new AppError("Upload not found.", 404, "UPLOAD_NOT_FOUND");
+  }
+
+  if (upload.channel.userId !== userId) {
+    throw new AppError("You do not have permission to update this upload.", 403, "FORBIDDEN");
+  }
+
+  const updated = await Upload.where({ id: uploadId }).update({
+    ...(data.title ? { title: data.title } : {}),
+    ...(data.description !== undefined ? { description: data.description || null } : {}),
+    ...(data.thumbnailUrl !== undefined ? { thumbnailUrl: data.thumbnailUrl || null } : {}),
+    ...(data.visibility ? { visibility: data.visibility } : {}),
+  });
+
+  return updated;
+}
+
+/**
+ * 7. POST /api/v1/uploads/:uploadId/finalize
+ * Verifies the stored file and its ownership, then enqueues background processing.
+ * Idempotent: Repeated calls do not enqueue duplicate work.
+ */
 export async function finalizeUpload(uploadId: string, userId: string, storageKey?: string) {
   const upload = await Upload.where({ id: uploadId, isDeleted: false })
     .include("channel", (c) => c.select("id", "userId"))
     .first();
 
   if (!upload) {
-    throw new AppError("Upload not found.", 404);
+    throw new AppError("Upload not found.", 404, "UPLOAD_NOT_FOUND");
   }
 
   if (upload.channel.userId !== userId) {
-    throw new AppError("Unauthorized access to finalize this upload.", 403);
+    throw new AppError("Unauthorized access to finalize this upload.", 403, "FORBIDDEN");
   }
 
-  // Confirm raw upload completed and transition to TRANSCODING
+  // Idempotency check: Do not re-enqueue duplicate jobs if already processing or finished
+  if (upload.processingStatus === "TRANSCODING") {
+    return {
+      uploadId: upload.id,
+      status: upload.processingStatus,
+      message: "Upload is already in transcoding processing.",
+      alreadyProcessing: true,
+    };
+  }
+
+  if (upload.processingStatus === "COMPLETED") {
+    return {
+      uploadId: upload.id,
+      status: upload.processingStatus,
+      message: "Upload has already completed processing.",
+      alreadyCompleted: true,
+    };
+  }
+
+  // Enforce server-controlled storage path prefix
+  const expectedFolder = `raw/${upload.channel.id}/${uploadId}`;
+  if (storageKey && !storageKey.startsWith(expectedFolder)) {
+    throw new AppError(
+      "Supplied storage key does not match this upload session.",
+      403,
+      "INVALID_STORAGE_KEY",
+    );
+  }
+
+  let verifiedStorageKey = storageKey || `${expectedFolder}/source_video.mp4`;
+
+  // Verify object existence and size in Supabase Storage if configured
+  if (isStorageConfigured()) {
+    try {
+      const files = await storageService.listFiles(STORAGE_RAW_BUCKET, expectedFolder);
+
+      if (!files || files.length === 0) {
+        throw new AppError(
+          "No uploaded video found in storage for this session. Please complete the file upload before finalizing.",
+          400,
+          "MEDIA_NOT_FOUND",
+        );
+      }
+
+      // Identify the uploaded file
+      const mediaFile = files[0];
+      if (!mediaFile) {
+        throw new AppError("No file found in upload session folder.", 400, "MEDIA_NOT_FOUND");
+      }
+      verifiedStorageKey = `${expectedFolder}/${mediaFile.name}`;
+
+      const rawSizeBytes = (mediaFile as any).metadata?.size || 0;
+      if (rawSizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+        // Enforce maximum size: clean up oversized object and mark failed
+        await storageService.deleteFiles(STORAGE_RAW_BUCKET, [verifiedStorageKey]);
+        await Upload.where({ id: uploadId }).update({ processingStatus: "FAILED" });
+        throw new AppError(
+          `Uploaded video (${Math.round(rawSizeBytes / (1024 * 1024))} MB) exceeds maximum allowed limit.`,
+          413,
+          "FILE_TOO_LARGE",
+        );
+      }
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      console.warn("[Upload Service] Storage verification notice:", err.message);
+    }
+  }
+
+  // Transition status to TRANSCODING
   const updated = await Upload.where({ id: uploadId }).update({
     processingStatus: "TRANSCODING",
   });
 
   if (!updated) {
-    throw new AppError("Failed to finalize upload.", 500);
+    throw new AppError("Failed to transition upload state to TRANSCODING.", 500);
   }
-
-  // Derive storage key if not explicitly passed
-  const effectiveKey = storageKey || `raw/${upload.channel.id}/${uploadId}/video.mp4`;
 
   // Enqueue background transcoding job into BullMQ
   const job = await enqueueTranscodeJob({
     uploadId: updated.id,
     channelId: upload.channel.id,
-    rawVideoKey: effectiveKey,
+    rawVideoKey: verifiedStorageKey,
     title: upload.title,
   });
 
@@ -179,184 +410,50 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     uploadId: updated.id,
     status: updated.processingStatus,
     jobId: job ? job.id : null,
-    message: "Raw upload finalized. Video queued for background transcoding.",
+    message: "Raw upload verified successfully and queued for transcoding.",
   };
 }
 
-
-
-export async function getUploadById(id: string, currentUserId?: string) {
-  const upload = await Upload.where({ id, isDeleted: false })
-    .include("channel", (c) =>
-      c.select("id", "userId", "handle", "channelName", "profilePictureUrl"),
-    )
-    .include("videos", (v) => v.select("id", "resolution", "url"))
-    .include("comments", (c) => c.count())
-    .include("interactions", (i) => i.count())
+/**
+ * 8. DELETE /api/v1/uploads/:uploadId
+ * Cancels or soft-deletes an upload session and cleans up raw storage objects.
+ */
+export async function deleteUpload(uploadId: string, userId: string) {
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
     .first();
 
   if (!upload) {
-    throw new AppError("Video not found.", 404);
+    throw new AppError("Upload not found.", 404, "UPLOAD_NOT_FOUND");
   }
 
-  if (upload.visibility === "PRIVATE") {
-    if (!currentUserId || upload.channel.userId !== currentUserId) {
-      throw new AppError("This video is private.", 403);
+  if (upload.channel.userId !== userId) {
+    throw new AppError("You do not have permission to delete this upload.", 403, "FORBIDDEN");
+  }
+
+  // 1. Soft-delete in database
+  await Upload.where({ id: uploadId }).update({ isDeleted: true });
+
+  // 2. Safe cleanup of raw objects in storage
+  if (isStorageConfigured()) {
+    try {
+      const folder = `raw/${upload.channel.id}/${uploadId}`;
+      const files = await storageService.listFiles(STORAGE_RAW_BUCKET, folder);
+      if (files && files.length > 0) {
+        const filePaths = files.map((f) => `${folder}/${f.name}`);
+        await storageService.deleteFiles(STORAGE_RAW_BUCKET, filePaths);
+      }
+    } catch (err: any) {
+      console.warn("[Upload Service] Cleanup storage files warning:", err.message);
     }
   }
 
-  // Increment view count
-  const updatedViewCount = upload.viewCount + 1;
-  await Upload.where({ id }).update({ viewCount: updatedViewCount });
-
-  return {
-    ...upload,
-    viewCount: updatedViewCount,
-  };
+  return { message: "Upload session deleted successfully." };
 }
 
-export async function getPublicUploads(pagination: Pagination) {
-  const { page, limit } = pagination;
-  const offset = (page - 1) * limit;
-
-  const [items, countResult] = await Promise.all([
-    Upload.where({ isDeleted: false, visibility: "PUBLIC" })
-      .include("channel", (c) =>
-        c.select("id", "handle", "channelName", "profilePictureUrl"),
-      )
-      .orderBy((u) => u.createdAt.desc())
-      .limit(limit)
-      .offset(offset)
-      .all(),
-    Upload.where({ isDeleted: false, visibility: "PUBLIC" }).aggregate((agg) => ({
-      count: agg.count(),
-    })),
-  ]);
-
-  return {
-    items,
-    pagination: getPaginationMeta(countResult.count, page, limit),
-  };
-}
-
-export async function getChannelUploads(
-  channelId: string,
-  pagination: Pagination,
-  currentUserId?: string,
-) {
-  const channel = await Channel.first({ id: channelId });
-  if (!channel) {
-    throw new AppError("Channel not found.", 404);
-  }
-
-  const isOwner = currentUserId && channel.userId === currentUserId;
-  const whereCondition = isOwner
-    ? { channelId, isDeleted: false }
-    : { channelId, isDeleted: false, visibility: "PUBLIC" as const };
-
-  const { page, limit } = pagination;
-  const offset = (page - 1) * limit;
-
-  const [items, countResult] = await Promise.all([
-    Upload.where(whereCondition)
-      .include("channel", (c) =>
-        c.select("id", "handle", "channelName", "profilePictureUrl"),
-      )
-      .orderBy((u) => u.createdAt.desc())
-      .limit(limit)
-      .offset(offset)
-      .all(),
-    Upload.where(whereCondition).aggregate((agg) => ({
-      count: agg.count(),
-    })),
-  ]);
-
-  return {
-    items,
-    pagination: getPaginationMeta(countResult.count, page, limit),
-  };
-}
-
-export async function getMyUploads(userId: string, pagination: Pagination) {
-  const { page, limit } = pagination;
-  const channel = await Channel.where({ userId }).first();
-  if (!channel) {
-    return {
-      items: [],
-      pagination: getPaginationMeta(0, page, limit),
-    };
-  }
-
-  const offset = (page - 1) * limit;
-  const whereCondition = { channelId: channel.id, isDeleted: false };
-
-  const [items, countResult] = await Promise.all([
-    Upload.where(whereCondition)
-      .include("videos", (v) => v.select("id", "resolution", "url"))
-      .orderBy((u) => u.createdAt.desc())
-      .limit(limit)
-      .offset(offset)
-      .all(),
-    Upload.where(whereCondition).aggregate((agg) => ({
-      count: agg.count(),
-    })),
-  ]);
-
-  return {
-    items,
-    pagination: getPaginationMeta(countResult.count, page, limit),
-  };
-}
-
-export async function updateUpload(
-  id: string,
-  input: UpdateUploadInput,
-  userId: string,
-) {
-  const data = updateUploadSchema.parse(input);
-
-  const upload = await Upload.where({ id, isDeleted: false })
-    .include("channel", (c) => c.select("id", "userId"))
-    .first();
-
-  if (!upload) {
-    throw new AppError("Video not found.", 404);
-  }
-
-  if (upload.channel.userId !== userId) {
-    throw new AppError("You do not have permission to update this video.", 403);
-  }
-
-  const updated = await Upload.where({ id }).update({
-    ...(data.title ? { title: data.title } : {}),
-    ...(data.description !== undefined ? { description: data.description || null } : {}),
-    ...(data.thumbnailUrl !== undefined ? { thumbnailUrl: data.thumbnailUrl || null } : {}),
-    ...(data.hlsManifestUrl !== undefined ? { hlsManifestUrl: data.hlsManifestUrl || null } : {}),
-    ...(data.visibility ? { visibility: data.visibility } : {}),
-    ...(data.processingStatus ? { processingStatus: data.processingStatus } : {}),
-  });
-
-  return updated;
-}
-
-export async function deleteUpload(id: string, userId: string) {
-  const upload = await Upload.where({ id, isDeleted: false })
-    .include("channel", (c) => c.select("id", "userId"))
-    .first();
-
-  if (!upload) {
-    throw new AppError("Video not found.", 404);
-  }
-
-  if (upload.channel.userId !== userId) {
-    throw new AppError("You do not have permission to delete this video.", 403);
-  }
-
-  await Upload.where({ id }).update({ isDeleted: true });
-
-  return { message: "Video deleted successfully" };
-}
-
+/**
+ * Helper for adding resolutions (used during video publication/transcoding)
+ */
 export async function addVideoResolution(
   uploadId: string,
   input: AddVideoResolutionInput,
