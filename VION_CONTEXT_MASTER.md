@@ -215,6 +215,30 @@ model Video {
   - Verified all 91 endpoints are mounted, typed, and functional.
   - Confirmed test coverage of 42 backend tests across 4 test suites (100% pass rate).
 
+### Milestone 9: Video Publication & HLS Playback Delivery
+- **Scope**: Connected the transcoding pipeline to the existing video and playback API in `vion_plan.md`. Enforced server-side visibility rules, direct storage media delivery, view count debouncing, and private media security.
+- **Key Implementations**:
+  1. **Publication Readiness Gate** ([`video.service.ts`](./backend/src/modules/video/video.service.ts)):
+     - `publishVideo()` rejects non-completed or failed uploads with `409 Conflict` (`PROCESSING_NOT_COMPLETED` or `MANIFEST_MISSING`).
+     - Atomically transitions status to `COMPLETED` and sets published metadata (`title`, `description`, `visibility`, `thumbnailUrl`).
+  2. **Visibility Authorization & Feed Isolation**:
+     - `PUBLIC`: Accessible to everyone, surfaced in feeds and search queries.
+     - `UNLISTED`: Accessible directly by video ID, hidden from feeds and search results.
+     - `PRIVATE`: Strictly forbidden to non-owners with `403 Forbidden` (`PRIVATE_VIDEO`). Applied on both `GET /videos/:videoId`, `/playback`, and `/manifest`.
+     - [`feed.service.ts`](./backend/src/modules/feed/feed.service.ts) and [`search.service.ts`](./backend/src/modules/search/search.service.ts) updated with `processingStatus: "COMPLETED"`, ensuring incomplete or failed uploads never leak into discovery.
+  3. **Direct Storage Playback & Manifest Delivery**:
+     - `GET /api/v1/videos/:videoId/playback`: Returns playback configuration `{ videoId, title, streamType: "HLS", hlsManifestUrl, manifestRoute, isReady, renditions, channel }`.
+     - `GET /api/v1/videos/:videoId/manifest`: Dual delivery mode — returns JSON if requested by API clients (`Accept: application/json` or `?format=json`), or issues an HTTP 302 redirect directly to the storage manifest for native HLS players (`<video src="...">`, Hls.js).
+     - No video segments or media bytes are proxied through Express, preserving API memory and throughput.
+  4. **View Count Debouncing & Polling Protection**:
+     - Implemented `shouldIncrementView(clientIdentifier, videoId)` with an in-memory sliding 60-second cooldown per client/video.
+     - Detects and ignores polling requests (`?poll=true`, `x-polling: true`) and manifest refreshes.
+  5. **Private Media Relative-Path Security Analysis**:
+     - Investigated Supabase Storage HMAC signed URLs. Token parameters (`?token=xyz`) apply to specific object paths. Standard HLS players resolving relative child playlists (`720p/index.m3u8`) and `.ts` chunks do not append the parent query string.
+     - Server-side authorization blocks unauthorized manifest acquisition. Production mitigation roadmap documented (Cloudflare Signed Cookies or manifest rewriting proxy).
+  6. **Automated Test Suite**:
+     - Added 14 unit and integration tests in [`video.test.ts`](./backend/src/modules/video/video.test.ts) covering publication gates, visibility matrix, 403 errors, player payloads, and view debouncing.
+
 ---
 
 ## 📊 Complete API Contract Status Matrix (91 Endpoints)
@@ -242,7 +266,7 @@ model Video {
 
 ---
 
-## 🧪 Automated Test Coverage (42 Tests Passing)
+## 🧪 Automated Test Coverage (56 Tests Passing)
 
 All tests execute via `bun test` in the `backend` directory:
 
@@ -297,7 +321,23 @@ src/modules/upload/upload.test.ts (14 tests)
 ✔ repeated finalization is idempotent and does not enqueue duplicate work
 ✔ handles completed upload finalization idempotently
 
-TOTAL: 42 PASS, 0 FAIL (126 expect() assertions)
+src/modules/video/video.test.ts (14 tests)
+✔ rejects publication when upload processing is still PENDING or IN_PROGRESS
+✔ rejects publication when upload processing has FAILED
+✔ rejects publication if HLS master manifest is missing
+✔ successfully publishes video when processingStatus is COMPLETED with manifest
+✔ allows anyone to view a PUBLIC video
+✔ allows anyone with the direct ID to view an UNLISTED video
+✔ blocks unauthenticated visitors from accessing a PRIVATE video with 403
+✔ blocks non-owner authenticated users from accessing a PRIVATE video with 403
+✔ allows video owner to view their own PRIVATE video
+✔ throws 404 for nonexistent video ID
+✔ returns complete player metadata and renditions from getPlayback
+✔ returns manifest URL and supports both JSON and 302 redirect responses
+✔ increments view count on first watch request
+✔ debounces view counts within cooldown window and ignores polling requests
+
+TOTAL: 56 PASS, 0 FAIL (168 expect() assertions)
 ```
 
 ---
@@ -314,6 +354,7 @@ All work follows small, incremental commits on branch `dev`:
 | `c0e853f` | `feat(media): implement FFprobe video inspection and FFmpeg thumbnail generation` | `mediaService.ts`, `mediaService.test.ts` |
 | `0d56848` | `feat(queue): implement BullMQ video transcoding queue and worker foundation` | `transcodingWorker.ts`, `videoQueue.ts`, `videoQueue.test.ts` |
 | `f6d60f7` | `feat(transcoding): implement FFmpeg adaptive HLS transcoding pipeline and worker integration` | `transcodingProfiles.ts`, `processSpawner.ts`, `transcodingService.ts`, `transcodingService.test.ts` |
+| *pending* | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
 
 ---
 

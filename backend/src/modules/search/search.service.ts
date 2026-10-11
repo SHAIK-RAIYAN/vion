@@ -18,7 +18,7 @@ export async function searchContent(query: string, pagination: Pagination) {
 
   // Fetch candidate public videos
   const [allVideos, channels] = await Promise.all([
-    Upload.where({ isDeleted: false, visibility: "PUBLIC" })
+    Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
       .include("channel", (c) =>
         c.select("id", "handle", "channelName", "profilePictureUrl"),
       )
@@ -57,7 +57,7 @@ export async function getSuggestions(query: string) {
     return [];
   }
 
-  const videos = await Upload.where({ isDeleted: false, visibility: "PUBLIC" })
+  const videos = await Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
     .select("title")
     .limit(50)
     .all();

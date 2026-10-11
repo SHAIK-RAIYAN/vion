@@ -8,7 +8,7 @@ export async function getFeed(pagination: Pagination, currentUserId?: string) {
   const offset = (page - 1) * limit;
 
   const [items, countResult] = await Promise.all([
-    Upload.where({ isDeleted: false, visibility: "PUBLIC" })
+    Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
       .include("channel", (c) =>
         c.select("id", "handle", "channelName", "profilePictureUrl"),
       )
@@ -19,7 +19,7 @@ export async function getFeed(pagination: Pagination, currentUserId?: string) {
       .limit(limit)
       .offset(offset)
       .all(),
-    Upload.where({ isDeleted: false, visibility: "PUBLIC" }).aggregate((agg) => ({
+    Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" }).aggregate((agg) => ({
       count: agg.count(),
     })),
   ]);

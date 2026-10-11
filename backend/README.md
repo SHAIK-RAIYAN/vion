@@ -185,6 +185,55 @@ ffmpeg \
 
 ---
 
+## 📺 Video Publication & Playback Delivery (`/api/v1/videos`)
+
+Once video transcoding finishes, the processed upload can be published and streamed across the platform.
+
+### 1. Publication Readiness Gate
+- `POST /api/v1/videos`: Confirms channel ownership, verifies that `processingStatus === "COMPLETED"` and `hlsManifestUrl` is present.
+- **Incomplete / Failed Rejection**: Incomplete, uploading, transcoding, or failed uploads cannot be published (`409 Conflict`).
+- **Visibility Modes**:
+  - `PUBLIC`: Available in global feed (`/feed`), search results (`/search`), and public channel views.
+  - `UNLISTED`: Hidden from feed and search; playable only by direct URL (`/watch/:id`).
+  - `PRIVATE`: Strictly gated to the channel owner; returns `403 Forbidden` to guests and other authenticated users.
+
+### 2. Player Playback Configuration & Direct Manifest Delivery
+- `GET /api/v1/videos/:videoId/playback`: Returns player configuration:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "videoId": "upl_123",
+      "title": "My HLS Video",
+      "streamType": "HLS",
+      "hlsManifestUrl": "https://storage.vion.local/processed-videos/.../master.m3u8",
+      "manifestRoute": "/api/v1/videos/upl_123/manifest",
+      "isReady": true,
+      "visibility": "PUBLIC",
+      "renditions": [
+        { "id": "v_1080", "resolution": "1080p", "url": "..." },
+        { "id": "v_720", "resolution": "720p", "url": "..." }
+      ]
+    }
+  }
+  ```
+- `GET /api/v1/videos/:videoId/manifest`: Dual-format HLS manifest endpoint:
+  - When requested by media players (Safari, Hls.js, ExoPlayer), redirects via `302 Found` directly to the storage CDN master playlist (`Content-Type: application/vnd.apple.mpegurl`).
+  - When requested by API consumers with `Accept: application/json` or `?format=json`, returns standard JSON response.
+  - Video bytes and `.ts` chunks stream directly from storage/CDN, keeping Express HTTP threads completely lightweight.
+
+### 3. Deliberate View Counting & Cooldown Strategy
+- Normal `GET /api/v1/videos/:videoId` reads are debounced by a 60-second sliding cooldown cache per client IP/user ID.
+- Rapid page refreshes, status polling, or manifest loops do NOT artificially inflate `viewCount`.
+
+### 4. Private Media Security & Signed HLS Considerations
+- **The Relative Path Dilemma in HLS**: Standard signed URLs (e.g. `createSignedUrl("private", "master.m3u8?token=xyz")`) only authorize `master.m3u8`. Because standard HLS players resolve relative child playlist paths (`720p/index.m3u8`) and chunks (`segment_000.ts`) without automatically forwarding HMAC query parameters, naive master-only signing causes child segment fetches to fail.
+- **Vion's Multi-Tier Architecture**:
+  - Server-side authorization check on `/playback` and `/manifest` rejecting unauthorized callers with `403 Forbidden` (`PRIVATE_VIDEO`).
+  - Public & Unlisted videos are cached at edge CDN nodes from `processed-videos`.
+  - For advanced DRM/signed cookies, CDN-level tokenized cookies (e.g. Cloudflare Signed Cookies) can be attached to the domain without modifying the database schema.
+
+---
 
 ## 🎬 Upload API Endpoints (`/api/v1/uploads`)
 

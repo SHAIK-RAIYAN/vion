@@ -26,7 +26,16 @@ const getVideoById = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Video ID is required.", 400);
   }
 
-  const video = await videoService.getVideoById(targetId, req.user?.id);
+  // Derive client identity for view rate-limiting
+  const clientIdentifier = req.user?.id || req.ip || "unknown";
+  // Record view on normal page loads; ignore if client signals polling (x-polling header or poll=true)
+  const isPolling = req.headers["x-polling"] === "true" || req.query.poll === "true";
+  const recordView = !isPolling;
+
+  const video = await videoService.getVideoById(targetId, req.user?.id, {
+    clientIdentifier,
+    recordView,
+  });
   res.status(200).json({
     success: true,
     message: "Video fetched successfully",
@@ -94,12 +103,21 @@ const getManifest = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Video ID is required.", 400);
   }
 
-  const manifest = await videoService.getManifest(targetId);
-  res.status(200).json({
-    success: true,
-    message: "HLS manifest fetched successfully",
-    data: manifest,
-  });
+  const manifestData = await videoService.getManifest(targetId, req.user?.id);
+
+  // If client expects JSON response (API client or frontend query)
+  const acceptHeader = req.headers.accept || "";
+  if (acceptHeader.includes("application/json") || req.query.format === "json") {
+    return res.status(200).json({
+      success: true,
+      message: "HLS manifest fetched successfully",
+      data: manifestData,
+    });
+  }
+
+  // Redirect directly to the HLS master playlist URL for media players (Safari, Hls.js, ExoPlayer)
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.redirect(302, manifestData.manifestUrl);
 });
 
 const likeVideo = asyncHandler(async (req: Request, res: Response) => {

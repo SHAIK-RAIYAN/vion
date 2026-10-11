@@ -29,7 +29,7 @@ router.post("/", authMiddleware, publishVideo);
 
 // Section 8: PLAYBACK
 router.get("/:videoId/playback", optionalAuthMiddleware, getPlayback);
-router.get("/:videoId/manifest", getManifest);
+router.get("/:videoId/manifest", optionalAuthMiddleware, getManifest);
 
 // Section 9: REACTIONS
 router.put("/:videoId/like", authMiddleware, likeVideo);
