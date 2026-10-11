@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { AppError } from "../../utils/AppError";
-import { paginationSchema } from "../../utils/pagination";
 import * as uploadService from "./upload.service";
 
 const createUpload = asyncHandler(async (req: Request, res: Response) => {
@@ -11,61 +10,69 @@ const createUpload = asyncHandler(async (req: Request, res: Response) => {
 
   const upload = await uploadService.createUpload(req.body, req.user.id);
   res.status(201).json({
-    message: "Video metadata created successfully",
+    success: true,
+    message: "Upload session created successfully",
     data: upload,
   });
 });
 
-const getUploadById = asyncHandler(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
-    throw new AppError("Video ID is required.", 400);
-  }
-
-  const upload = await uploadService.getUploadById(id, req.user?.id);
-  res.status(200).json({
-    message: "Video fetched successfully",
-    data: upload,
-  });
-});
-
-const getPublicUploads = asyncHandler(async (req: Request, res: Response) => {
-  const pagination = paginationSchema.parse(req.query);
-  const result = await uploadService.getPublicUploads(pagination);
-  res.status(200).json({
-    message: "Videos fetched successfully",
-    ...result,
-  });
-});
-
-const getChannelUploads = asyncHandler(async (req: Request, res: Response) => {
-  const { channelId } = req.params;
-  if (!channelId || typeof channelId !== "string") {
-    throw new AppError("Channel ID is required.", 400);
-  }
-
-  const pagination = paginationSchema.parse(req.query);
-  const result = await uploadService.getChannelUploads(
-    channelId,
-    pagination,
-    req.user?.id,
-  );
-  res.status(200).json({
-    message: "Channel videos fetched successfully",
-    ...result,
-  });
-});
-
-const getMyUploads = asyncHandler(async (req: Request, res: Response) => {
+const createPresignedUrl = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     throw new AppError("Unauthorized.", 401);
   }
 
-  const pagination = paginationSchema.parse(req.query);
-  const result = await uploadService.getMyUploads(req.user.id, pagination);
+  const result = await uploadService.createPresignedUrl(req.body, req.user.id);
+  res.status(201).json({
+    success: true,
+    message: "Presigned upload URL generated successfully",
+    data: result,
+  });
+});
+
+const createRemoteUrl = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const result = await uploadService.createRemoteUrlUpload(req.body, req.user.id);
+  res.status(201).json({
+    success: true,
+    message: "Remote URL upload registered successfully",
+    data: result,
+  });
+});
+
+const getUploadById = asyncHandler(async (req: Request, res: Response) => {
+  const { uploadId, id } = req.params;
+  const targetId = uploadId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Upload ID is required.", 400);
+  }
+
+  const upload = await uploadService.getUploadById(targetId, req.user?.id);
   res.status(200).json({
-    message: "My videos fetched successfully",
-    ...result,
+    success: true,
+    message: "Upload fetched successfully",
+    data: upload,
+  });
+});
+
+const getUploadStatus = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { uploadId, id } = req.params;
+  const targetId = uploadId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Upload ID is required.", 400);
+  }
+
+  const status = await uploadService.getUploadStatus(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Upload status fetched successfully",
+    data: status,
   });
 });
 
@@ -74,15 +81,36 @@ const updateUpload = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Unauthorized.", 401);
   }
 
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
-    throw new AppError("Video ID is required.", 400);
+  const { uploadId, id } = req.params;
+  const targetId = uploadId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Upload ID is required.", 400);
   }
 
-  const upload = await uploadService.updateUpload(id, req.body, req.user.id);
+  const upload = await uploadService.updateUpload(targetId, req.body, req.user.id);
   res.status(200).json({
-    message: "Video updated successfully",
+    success: true,
+    message: "Upload metadata updated successfully",
     data: upload,
+  });
+});
+
+const finalizeUpload = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { uploadId, id } = req.params;
+  const targetId = uploadId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Upload ID is required.", 400);
+  }
+
+  const result = await uploadService.finalizeUpload(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: result,
   });
 });
 
@@ -91,43 +119,28 @@ const deleteUpload = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Unauthorized.", 401);
   }
 
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
-    throw new AppError("Video ID is required.", 400);
+  const { uploadId, id } = req.params;
+  const targetId = uploadId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Upload ID is required.", 400);
   }
 
-  const result = await uploadService.deleteUpload(id, req.user.id);
-  res.status(200).json(result);
-});
-
-const addVideoResolution = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    throw new AppError("Unauthorized.", 401);
-  }
-
-  const { id } = req.params;
-  if (!id || typeof id !== "string") {
-    throw new AppError("Video ID is required.", 400);
-  }
-
-  const video = await uploadService.addVideoResolution(
-    id,
-    req.body,
-    req.user.id,
-  );
-  res.status(201).json({
-    message: "Video resolution added successfully",
-    data: video,
+  const result = await uploadService.deleteUpload(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: null,
   });
 });
 
 export {
   createUpload,
+  createPresignedUrl,
+  createRemoteUrl,
   getUploadById,
-  getPublicUploads,
-  getChannelUploads,
-  getMyUploads,
+  getUploadStatus,
   updateUpload,
+  finalizeUpload,
   deleteUpload,
-  addVideoResolution,
 };
+

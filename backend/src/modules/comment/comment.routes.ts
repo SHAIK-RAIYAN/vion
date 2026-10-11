@@ -1,7 +1,6 @@
 import { Router } from "express";
 import {
-  createComment,
-  getCommentsByUpload,
+  getCommentById,
   updateComment,
   deleteComment,
 } from "./comment.controller";
@@ -9,12 +8,10 @@ import { authMiddleware } from "../../middlewares/authMiddleware";
 
 const router = Router();
 
-// Upload-scoped comment endpoints
-router.get("/upload/:uploadId", getCommentsByUpload);
-router.post("/upload/:uploadId", authMiddleware, createComment);
-
-// Comment-specific endpoints
+// Section 10: COMMENTS (Specific comment item operations)
+router.get("/:commentId", getCommentById);
 router.patch("/:commentId", authMiddleware, updateComment);
 router.delete("/:commentId", authMiddleware, deleteComment);
 
 export default router;
+

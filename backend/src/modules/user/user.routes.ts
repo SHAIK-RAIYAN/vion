@@ -1,16 +1,19 @@
 import { Router } from "express";
 import {
-  getuser,
+  getUser,
   updateUser,
   deleteUser,
   changePassword,
+  getUserSubscriptions,
 } from "./user.controller";
 
 const router = Router();
 
-router.get("/me", getuser);
+router.get("/me", getUser);
 router.patch("/me", updateUser);
 router.delete("/me", deleteUser);
 router.patch("/me/changePassword", changePassword);
+router.get("/me/subscriptions", getUserSubscriptions);
 
 export default router;
+

@@ -6,7 +6,11 @@ import { NODE_ENV } from "../../config/config";
 const signUpUser = asyncHandler(async (req: Request, res: Response) => {
   const user = await authservice.signUpUser(req.body);
 
-  res.status(200).json({ message: "Signup Successfull", data: user });
+  res.status(201).json({
+    success: true,
+    message: "Signup Successful",
+    data: user,
+  });
 });
 
 const signInUser = asyncHandler(async (req: Request, res: Response) => {
@@ -19,7 +23,12 @@ const signInUser = asyncHandler(async (req: Request, res: Response) => {
     sameSite: "lax",
   });
 
-  res.status(200).json({ message: "SignIn Successfull", token });
+  res.status(200).json({
+    success: true,
+    message: "SignIn Successful",
+    token,
+    data: { token },
+  });
 });
 
 const googleAuthUser = asyncHandler(async (req: Request, res: Response) => {
@@ -33,10 +42,13 @@ const googleAuthUser = asyncHandler(async (req: Request, res: Response) => {
   });
 
   res.status(200).json({
-    message: "Google Authentication Successfull",
+    success: true,
+    message: "Google Authentication Successful",
     token,
+    user,
     data: user,
   });
+
 });
 
 const signOutUser = asyncHandler((req: Request, res: Response) => {
@@ -46,7 +58,46 @@ const signOutUser = asyncHandler((req: Request, res: Response) => {
     sameSite: "lax",
   });
 
-  res.status(200).json({ message: "SignOut Successfull" });
+  res.status(200).json({
+    success: true,
+    message: "SignOut Successful",
+    data: null,
+  });
 });
 
-export { signUpUser, signInUser, googleAuthUser, signOutUser };
+const getAuthMe = asyncHandler((req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: "Session authenticated",
+    data: req.user,
+  });
+});
+
+const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authservice.forgotPassword(req.body);
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: result,
+  });
+});
+
+const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authservice.resetPassword(req.body);
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: result,
+  });
+});
+
+export {
+  signUpUser,
+  signInUser,
+  googleAuthUser,
+  signOutUser,
+  getAuthMe,
+  forgotPassword,
+  resetPassword,
+};
+

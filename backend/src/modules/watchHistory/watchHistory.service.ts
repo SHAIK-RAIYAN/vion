@@ -10,23 +10,26 @@ const { WatchHistory, Upload } = db.orm.public;
 
 export async function recordProgress(
   userId: string,
-  input: RecordHistoryInput,
+  input: { uploadId?: string; videoId?: string; progressTimeStamp: number },
 ) {
-  const data = recordHistorySchema.parse(input);
+  const targetId = input.videoId || input.uploadId;
+  if (!targetId) {
+    throw new AppError("Video ID is required.", 400);
+  }
 
-  const upload = await Upload.where({ id: data.uploadId, isDeleted: false }).first();
+  const upload = await Upload.where({ id: targetId, isDeleted: false }).first();
   if (!upload) {
     throw new AppError("Video not found.", 404);
   }
 
   const existing = await WatchHistory.where({
     userId,
-    uploadId: data.uploadId,
+    uploadId: targetId,
   }).first();
 
   if (existing) {
     const updated = await WatchHistory.where({ id: existing.id }).update({
-      progressTimeStamp: data.progressTimeStamp,
+      progressTimeStamp: input.progressTimeStamp || 0,
       watchedAt: new Date(),
     });
     return updated;
@@ -34,13 +37,31 @@ export async function recordProgress(
 
   const created = await WatchHistory.create({
     userId,
-    uploadId: data.uploadId,
-    progressTimeStamp: data.progressTimeStamp,
+    uploadId: targetId,
+    progressTimeStamp: input.progressTimeStamp || 0,
     watchedAt: new Date(),
   });
 
   return created;
 }
+
+export async function getVideoProgress(userId: string, videoId: string) {
+  const existing = await WatchHistory.where({ userId, uploadId: videoId }).first();
+  if (!existing) {
+    return {
+      videoId,
+      progressTimeStamp: 0,
+      watchedAt: null,
+    };
+  }
+
+  return {
+    videoId: existing.uploadId,
+    progressTimeStamp: existing.progressTimeStamp,
+    watchedAt: existing.watchedAt,
+  };
+}
+
 
 export async function getWatchHistory(userId: string, pagination: Pagination) {
   const { page, limit } = pagination;

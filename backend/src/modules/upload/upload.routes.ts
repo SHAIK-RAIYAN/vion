@@ -1,37 +1,27 @@
 import { Router } from "express";
 import {
   createUpload,
+  createPresignedUrl,
+  createRemoteUrl,
   getUploadById,
-  getPublicUploads,
-  getChannelUploads,
-  getMyUploads,
+  getUploadStatus,
   updateUpload,
+  finalizeUpload,
   deleteUpload,
-  addVideoResolution,
 } from "./upload.controller";
-import {
-  authMiddleware,
-  optionalAuthMiddleware,
-} from "../../middlewares/authMiddleware";
+import { authMiddleware } from "../../middlewares/authMiddleware";
 
 const router = Router();
 
-// Feed / Public uploads
-router.get("/", getPublicUploads);
-
-// Current user's uploads (before /:id)
-router.get("/my", authMiddleware, getMyUploads);
-
-// Channel uploads
-router.get("/channel/:channelId", optionalAuthMiddleware, getChannelUploads);
-
-// Single video view with visibility logic
-router.get("/:id", optionalAuthMiddleware, getUploadById);
-
-// Protected video operations
+// Canonical Section 5: UPLOADS
 router.post("/", authMiddleware, createUpload);
-router.patch("/:id", authMiddleware, updateUpload);
-router.delete("/:id", authMiddleware, deleteUpload);
-router.post("/:id/videos", authMiddleware, addVideoResolution);
+router.post("/presigned-url", authMiddleware, createPresignedUrl);
+router.post("/remote-url", authMiddleware, createRemoteUrl);
+router.get("/:uploadId", authMiddleware, getUploadById);
+router.get("/:uploadId/status", authMiddleware, getUploadStatus);
+router.patch("/:uploadId", authMiddleware, updateUpload);
+router.post("/:uploadId/finalize", authMiddleware, finalizeUpload);
+router.delete("/:uploadId", authMiddleware, deleteUpload);
 
 export default router;
+

@@ -28,8 +28,9 @@ export function VideoFeed({ searchQuery = "" }: VideoFeedProps) {
     }
 
     try {
-      const res = await api.uploads.getPublicFeed(page, 20);
+      const res = await api.feed.get(page, 20);
       if (append) {
+
         setVideos((prev) => [...prev, ...res.items]);
       } else {
         setVideos(res.items);

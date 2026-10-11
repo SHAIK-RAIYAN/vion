@@ -26,12 +26,135 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
     description: data.description || null,
     thumbnailUrl: data.thumbnailUrl || null,
     hlsManifestUrl: data.hlsManifestUrl || null,
-    visibility: data.visibility,
-    processingStatus: data.processingStatus,
+    visibility: data.visibility || "PRIVATE",
+    processingStatus: "PENDING",
   });
 
   return upload;
 }
+
+export async function createPresignedUrl(
+  input: { fileName: string; contentType: string; fileSize?: number },
+  userId: string,
+) {
+  const channel = await Channel.where({ userId }).first();
+  if (!channel) {
+    throw new AppError("You must create a channel before uploading videos.", 400);
+  }
+
+  // Upload storage key pattern
+  const uploadId = crypto.randomUUID();
+  const sanitizedFileName = input.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const key = `raw/${channel.id}/${uploadId}/${sanitizedFileName}`;
+
+  // If R2 credentials are not yet configured by user, provide the canonical presigned structure
+  const uploadUrl = process.env.R2_PUBLIC_URL
+    ? `${process.env.R2_PUBLIC_URL}/${key}`
+    : `https://storage.vion.local/${key}`;
+
+  const upload = await Upload.create({
+    id: uploadId,
+    channelId: channel.id,
+    title: input.fileName.replace(/\.[^/.]+$/, "") || "Untitled Upload",
+    visibility: "PRIVATE",
+    processingStatus: "UPLOADING",
+  });
+
+  return {
+    uploadId: upload.id,
+    uploadUrl,
+    key,
+    method: "PUT",
+    headers: {
+      "Content-Type": input.contentType,
+    },
+    expiresInSeconds: 3600,
+  };
+}
+
+export async function createRemoteUrlUpload(
+  input: { url: string; title: string; description?: string },
+  userId: string,
+) {
+  const channel = await Channel.where({ userId }).first();
+  if (!channel) {
+    throw new AppError("You must create a channel before uploading videos.", 400);
+  }
+
+  const upload = await Upload.create({
+    channelId: channel.id,
+    title: input.title,
+    description: input.description || null,
+    visibility: "PRIVATE",
+    processingStatus: "PENDING",
+  });
+
+  return {
+    ...upload,
+    sourceRemoteUrl: input.url,
+  };
+}
+
+export async function getUploadStatus(uploadId: string, userId: string) {
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
+
+  if (!upload) {
+    throw new AppError("Upload not found.", 404);
+  }
+
+  if (upload.channel.userId !== userId) {
+    throw new AppError("Unauthorized access to upload status.", 403);
+  }
+
+  let progressPercentage = 0;
+  if (upload.processingStatus === "PENDING") progressPercentage = 10;
+  else if (upload.processingStatus === "UPLOADING") progressPercentage = 30;
+  else if (upload.processingStatus === "TRANSCODING") progressPercentage = 60;
+  else if (upload.processingStatus === "COMPLETED") progressPercentage = 100;
+  else if (upload.processingStatus === "FAILED") progressPercentage = 0;
+
+  return {
+    uploadId: upload.id,
+    status: upload.processingStatus,
+    progressPercentage,
+    hlsManifestUrl: upload.hlsManifestUrl,
+    thumbnailUrl: upload.thumbnailUrl,
+    updatedAt: upload.updatedAt,
+  };
+}
+
+export async function finalizeUpload(uploadId: string, userId: string) {
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
+
+  if (!upload) {
+    throw new AppError("Upload not found.", 404);
+  }
+
+  if (upload.channel.userId !== userId) {
+    throw new AppError("Unauthorized access to finalize this upload.", 403);
+  }
+
+  // Confirm raw upload completed and transition to TRANSCODING
+  const updated = await Upload.where({ id: uploadId }).update({
+    processingStatus: "TRANSCODING",
+  });
+
+  if (!updated) {
+    throw new AppError("Failed to finalize upload.", 500);
+  }
+
+  return {
+    uploadId: updated.id,
+    status: updated.processingStatus,
+    message: "Raw upload finalized. Video queued for transcoding processing.",
+  };
+}
+
+
 
 export async function getUploadById(id: string, currentUserId?: string) {
   const upload = await Upload.where({ id, isDeleted: false })

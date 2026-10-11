@@ -98,3 +98,14 @@ export async function updateChannel(input: UpdateChannelInput, userId: string) {
 
   return updatedChannel;
 }
+
+export async function deleteChannel(userId: string) {
+  const existingChannel = await Channel.where({ userId }).first();
+  if (!existingChannel) {
+    throw new AppError("Channel not found for this user.", 404);
+  }
+
+  await Channel.where({ id: existingChannel.id }).delete();
+  return { message: "Channel deleted successfully" };
+}
+

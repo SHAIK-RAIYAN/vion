@@ -18,10 +18,34 @@ const googleAuthSchema = zod.object({
   idToken: zod.string().min(1, "Google ID token is required"),
 });
 
+const forgotPasswordSchema = zod.object({
+  email: zod.email(),
+});
+
+const resetPasswordSchema = zod.object({
+  token: zod.string().min(1, "Reset token is required"),
+  newPassword: zod.string().min(8, "Password must be at least 8 characters"),
+});
+
 type SignupUser = zod.infer<typeof signUpUserSchema>;
 type SignInUser = zod.infer<typeof signInUserSchema>;
 type GoogleAuthInput = zod.infer<typeof googleAuthSchema>;
+type ForgotPasswordInput = zod.infer<typeof forgotPasswordSchema>;
+type ResetPasswordInput = zod.infer<typeof resetPasswordSchema>;
 
-export { signUpUserSchema, signInUserSchema, googleAuthSchema };
+export {
+  signUpUserSchema,
+  signInUserSchema,
+  googleAuthSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+};
 
-export type { SignupUser, SignInUser, GoogleAuthInput };
+export type {
+  SignupUser,
+  SignInUser,
+  GoogleAuthInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+};
+

@@ -19,6 +19,7 @@ const subscribe = asyncHandler(async (req: Request, res: Response) => {
     req.user.id,
   );
   res.status(201).json({
+    success: true,
     message: "Subscribed successfully",
     data: subscription,
   });
@@ -39,6 +40,7 @@ const unsubscribe = asyncHandler(async (req: Request, res: Response) => {
     req.user.id,
   );
   res.status(200).json({
+    success: true,
     message: "Unsubscribed successfully",
     data: result,
   });
@@ -59,6 +61,7 @@ const toggleSubscription = asyncHandler(async (req: Request, res: Response) => {
     req.user.id,
   );
   res.status(200).json({
+    success: true,
     message: result.isSubscribed
       ? "Subscribed successfully"
       : "Unsubscribed successfully",
@@ -82,6 +85,7 @@ const getSubscriptionStatus = asyncHandler(
       req.user.id,
     );
     res.status(200).json({
+      success: true,
       message: "Subscription status fetched successfully",
       data: status,
     });
@@ -99,7 +103,9 @@ const getMySubscriptions = asyncHandler(async (req: Request, res: Response) => {
     pagination,
   );
   res.status(200).json({
+    success: true,
     message: "Subscriptions fetched successfully",
+    data: result,
     ...result,
   });
 });
@@ -117,11 +123,14 @@ const getChannelSubscribers = asyncHandler(
       pagination,
     );
     res.status(200).json({
+      success: true,
       message: "Channel subscribers fetched successfully",
+      data: result,
       ...result,
     });
   },
 );
+
 
 export {
   subscribe,

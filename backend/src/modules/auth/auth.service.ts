@@ -7,9 +7,12 @@ import {
   signInUserSchema,
   signUpUserSchema,
   googleAuthSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   type SignInUser,
   type SignupUser,
 } from "./auth.schema";
+
 import { Temporal } from "temporal-polyfill";
 import { GOOGLE_CLIENT_ID, JWT_SECRET, SALT_ROUNDS } from "../../config/config";
 import { AppError } from "../../utils/AppError";
@@ -208,4 +211,50 @@ async function googleAuth(input: { idToken: string }) {
   return { token, user };
 }
 
-export { signUpUser, signInUser, googleAuth };
+async function forgotPassword(input: { email: string }) {
+  const data = forgotPasswordSchema.parse(input);
+  const user = await User.first({ email: data.email });
+  if (!user) {
+    // Avoid user enumeration
+    return { message: "If an account exists with this email, a reset token has been generated." };
+  }
+
+  const resetToken = jwt.sign(
+    { id: user.id, purpose: "password_reset" },
+    JWT_SECRET,
+    { expiresIn: "1h" },
+  );
+
+  return {
+    message: "Password reset token generated successfully",
+    resetToken,
+  };
+}
+
+async function resetPassword(input: { token: string; newPassword: string }) {
+  const data = resetPasswordSchema.parse(input);
+
+  let payload: any;
+  try {
+    payload = jwt.verify(data.token, JWT_SECRET);
+  } catch {
+    throw new AppError("Invalid or expired reset token.", 400);
+  }
+
+  if (payload.purpose !== "password_reset" || !payload.id) {
+    throw new AppError("Invalid reset token.", 400);
+  }
+
+  const user = await User.first({ id: payload.id });
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  const hashedPassword = await bcrypt.hash(data.newPassword, SALT_ROUNDS);
+  await User.where({ id: user.id }).update({ password: hashedPassword });
+
+  return { message: "Password reset successful. Please sign in with your new password." };
+}
+
+export { signUpUser, signInUser, googleAuth, forgotPassword, resetPassword };
+

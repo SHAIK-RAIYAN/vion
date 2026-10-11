@@ -35,8 +35,9 @@ export function WatchContent({ id }: { id: string }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await api.uploads.getById(id);
+        const res = await api.videos.getById(id);
         setVideo(res.data);
+
 
         if (res.data.channel?.id && user) {
           try {

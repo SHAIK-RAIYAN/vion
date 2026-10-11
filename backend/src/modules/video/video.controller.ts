@@ -1,0 +1,319 @@
+import type { Request, Response } from "express";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { AppError } from "../../utils/AppError";
+import { paginationSchema } from "../../utils/pagination";
+import * as videoService from "./video.service";
+import * as commentService from "../comment/comment.service";
+
+const publishVideo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const video = await videoService.publishVideo(req.body, req.user.id);
+  res.status(201).json({
+    success: true,
+    message: "Video published successfully",
+    data: video,
+  });
+});
+
+const getVideoById = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const video = await videoService.getVideoById(targetId, req.user?.id);
+  res.status(200).json({
+    success: true,
+    message: "Video fetched successfully",
+    data: video,
+  });
+});
+
+const updateVideo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const updated = await videoService.updateVideo(targetId, req.body, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Video metadata updated successfully",
+    data: updated,
+  });
+});
+
+const deleteVideo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const result = await videoService.deleteVideo(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: null,
+  });
+});
+
+const getPlayback = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const playback = await videoService.getPlayback(targetId, req.user?.id);
+  res.status(200).json({
+    success: true,
+    message: "Playback configuration fetched successfully",
+    data: playback,
+  });
+});
+
+const getManifest = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const manifest = await videoService.getManifest(targetId);
+  res.status(200).json({
+    success: true,
+    message: "HLS manifest fetched successfully",
+    data: manifest,
+  });
+});
+
+const likeVideo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const result = await videoService.likeVideo(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Video liked successfully",
+    data: result,
+  });
+});
+
+const unlikeVideo = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const result = await videoService.unlikeVideo(targetId, req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Like removed successfully",
+    data: result,
+  });
+});
+
+const getVideoLikeStatus = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const counts = await videoService.getVideoLikeStatus(targetId, req.user?.id);
+  res.status(200).json({
+    success: true,
+    message: "Video reaction status fetched successfully",
+    data: counts,
+  });
+});
+
+const createVideoComment = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const comment = await commentService.createComment(
+    targetId,
+    req.user.id,
+    req.body,
+  );
+  res.status(201).json({
+    success: true,
+    message: "Comment created successfully",
+    data: comment,
+  });
+});
+
+const getVideoComments = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const pagination = paginationSchema.parse(req.query);
+  const result = await commentService.getCommentsByUpload(
+    targetId,
+    pagination,
+  );
+  res.status(200).json({
+    success: true,
+    message: "Comments fetched successfully",
+    data: result,
+    ...result,
+  });
+});
+
+const getThumbnailPresignedUrl = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const result = await videoService.getThumbnailPresignedUrl(
+    targetId,
+    req.body,
+    req.user.id,
+  );
+  res.status(201).json({
+    success: true,
+    message: "Thumbnail upload URL generated",
+    data: result,
+  });
+});
+
+const finalizeThumbnail = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const updated = await videoService.finalizeThumbnail(
+    targetId,
+    req.body.thumbnailUrl,
+    req.user.id,
+  );
+  res.status(200).json({
+    success: true,
+    message: "Thumbnail updated successfully",
+    data: updated,
+  });
+});
+
+const getThumbnails = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = String(videoId || id || "");
+  if (!targetId) {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const video = await videoService.getVideoById(targetId, req.user?.id);
+  res.status(200).json({
+    success: true,
+    message: "Thumbnails fetched",
+    data: video.thumbnailUrl ? [{ id: "default", url: video.thumbnailUrl, isActive: true }] : [],
+  });
+});
+
+const setActiveThumbnail = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+  const { videoId, id } = req.params;
+  const targetId = String(videoId || id || "");
+  if (!targetId) {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const updated = await videoService.finalizeThumbnail(
+    targetId,
+    String(req.body?.thumbnailUrl || ""),
+    req.user.id,
+  );
+  res.status(200).json({
+    success: true,
+    message: "Active thumbnail updated",
+    data: updated,
+  });
+});
+
+const deleteThumbnail = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized.", 401);
+  }
+  const { videoId, id } = req.params;
+  const targetId = String(videoId || id || "");
+  if (!targetId) {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  await videoService.finalizeThumbnail(targetId, "", req.user.id);
+  res.status(200).json({
+    success: true,
+    message: "Thumbnail removed",
+    data: null,
+  });
+});
+
+
+export {
+  publishVideo,
+  getVideoById,
+  updateVideo,
+  deleteVideo,
+  getPlayback,
+  getManifest,
+  likeVideo,
+  unlikeVideo,
+  getVideoLikeStatus,
+  createVideoComment,
+  getVideoComments,
+  getThumbnailPresignedUrl,
+  finalizeThumbnail,
+  getThumbnails,
+  setActiveThumbnail,
+  deleteThumbnail,
+};

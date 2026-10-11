@@ -115,3 +115,20 @@ export async function deleteComment(commentId: string, userId: string) {
 
   return { message: "Comment deleted successfully" };
 }
+
+export async function getCommentById(commentId: string) {
+  const comment = await Comment.where({ id: commentId })
+    .include("user", (u) =>
+      u.select("id", "firstName", "lastName").include("channel", (c) =>
+        c.select("id", "handle", "channelName", "profilePictureUrl"),
+      ),
+    )
+    .first();
+
+  if (!comment) {
+    throw new AppError("Comment not found.", 404);
+  }
+
+  return comment;
+}
+
