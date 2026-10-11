@@ -206,7 +206,7 @@ Once video transcoding finishes, the processed upload can be published and strea
       "videoId": "upl_123",
       "title": "My HLS Video",
       "streamType": "HLS",
-      "hlsManifestUrl": "https://storage.vion.local/processed-videos/.../master.m3u8",
+      "hlsManifestUrl": "https://<supabase-project>.supabase.co/storage/v1/object/public/processed-videos/.../master.m3u8",
       "manifestRoute": "/api/v1/videos/upl_123/manifest",
       "isReady": true,
       "visibility": "PUBLIC",
