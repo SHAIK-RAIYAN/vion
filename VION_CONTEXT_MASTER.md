@@ -429,6 +429,7 @@ All work follows small, incremental commits on branch `dev`:
 | `f6d60f7` | `feat(transcoding): implement FFmpeg adaptive HLS transcoding pipeline and worker integration` | `transcodingProfiles.ts`, `processSpawner.ts`, `transcodingService.ts`, `transcodingService.test.ts` |
 | `074717f` | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
 | `b4a1469` | `feat(core): implement core operations for subscriptions, reactions, comments, history, feed, search, and admin` | `subscription.service.ts`, `interaction.service.ts`, `comment.service.ts`, `watchHistory.service.ts`, `feed.service.ts`, `search.service.ts`, `admin.routes.ts`, `coreRoutes.test.ts` |
+| `d2ab69d` | `feat(hardening): harden CORS, server shutdown, strict types, real media fixture verification, and operational documentation` | `index.ts`, `coreRoutes.test.ts`, `verify_real_fixture.ts`, `README.md`, `VION_CONTEXT_MASTER.md` |
 
 ---
 
