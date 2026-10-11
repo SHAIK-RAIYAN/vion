@@ -5,8 +5,10 @@
   "private": true,
   "scripts": {
     "dev": "bun --watch ./src/index.ts",
-    "start": "bun index.ts",
-    "build": "bun build index.ts --outdir ./dist",
+    "worker": "bun run src/worker/index.ts",
+    "worker:dev": "bun --watch src/worker/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun",
     "verify": "bun run src/verify.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma skills sync || exit 0",
@@ -27,12 +29,15 @@
   },
   "dependencies": {
     "@prisma/orm-postgres": "^8.0.0-rc.8",
+    "@supabase/supabase-js": "^2.117.3",
     "bcrypt": "^6.0.0",
+    "bullmq": "^6.3.12",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "google-auth-library": "^11.2.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "temporal-polyfill": "^1.0.4",
     "zod": "^4.5.4"
