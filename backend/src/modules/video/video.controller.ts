@@ -207,6 +207,7 @@ const getVideoComments = asyncHandler(async (req: Request, res: Response) => {
   const result = await commentService.getCommentsByUpload(
     targetId,
     pagination,
+    req.user?.id,
   );
   res.status(200).json({
     success: true,

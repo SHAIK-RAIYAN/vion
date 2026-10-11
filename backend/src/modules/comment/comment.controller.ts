@@ -55,7 +55,7 @@ const getCommentById = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Comment ID is required.", 400);
   }
 
-  const comment = await commentService.getCommentById(commentId);
+  const comment = await commentService.getCommentById(commentId, req.user?.id);
   res.status(200).json({
     success: true,
     message: "Comment fetched successfully",

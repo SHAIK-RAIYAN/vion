@@ -4,6 +4,7 @@ import { paginationSchema } from "../../utils/pagination";
 const createCommentSchema = zod.object({
   content: zod
     .string()
+    .trim()
     .min(1, "Comment content cannot be empty")
     .max(2000, "Comment cannot exceed 2000 characters"),
 });
@@ -11,6 +12,7 @@ const createCommentSchema = zod.object({
 const updateCommentSchema = zod.object({
   content: zod
     .string()
+    .trim()
     .min(1, "Comment content cannot be empty")
     .max(2000, "Comment cannot exceed 2000 characters"),
 });

@@ -239,6 +239,38 @@ model Video {
   6. **Automated Test Suite**:
      - Added 14 unit and integration tests in [`video.test.ts`](./backend/src/modules/video/video.test.ts) covering publication gates, visibility matrix, 403 errors, player payloads, and view debouncing.
 
+### Milestone 10: Core Domain Operations & Database Behaviors
+- **Scope**: Implemented and hardened routine database operations across Subscriptions, Reactions, Comments, Watch History, Feed, Search, and Administration without adding unnecessary architecture or modifying the fixed Prisma schema.
+- **Key Implementations**:
+  1. **Subscriptions** ([`subscription.service.ts`](./backend/src/modules/subscription/subscription.service.ts)):
+     - Disallows creators from subscribing to their own channel (`400 Bad Request`).
+     - Idempotent repeated subscribe/unsubscribe calls returning active records predictably.
+     - Multi-order deterministic sorting (`[(s) => s.createdAt.desc(), (s) => s.id.desc()]`).
+  2. **Reactions** ([`interaction.service.ts`](./backend/src/modules/interaction/interaction.service.ts)):
+     - Full support for `LIKE` and `DISLIKE` via `Interaction` model.
+     - Real-time reaction counts via database aggregation (`aggregate(agg => ({ count: agg.count() }))`). Zero fake schema columns.
+     - Idempotent `PUT /like` and `DELETE /like` with concurrency catch for `@@unique([userId, uploadId])`.
+     - Server-side visibility gating blocking unauthorized reactions on private videos (`403 Forbidden`).
+  3. **Comments** ([`comment.service.ts`](./backend/src/modules/comment/comment.service.ts)):
+     - Trimmed length validation rejecting whitespace-only inputs (`400 Bad Request`).
+     - Visibility isolation preventing comments on `PRIVATE` videos from being created or read by unauthorized callers (`403 Forbidden`).
+     - Stable pagination tiebreaker `[(c) => c.createdAt.desc(), (c) => c.id.desc()]`.
+     - Permissions: Either comment author or channel owner of video can delete comment (`403 Forbidden` for strangers).
+  4. **Watch History** ([`watchHistory.service.ts`](./backend/src/modules/watchHistory/watchHistory.service.ts)):
+     - Concurrency-safe upsert on `@@unique([userId, uploadId])` handling rapid heartbeat pings.
+     - Progress validation ensuring non-negative integer seconds.
+     - Idempotent removal and history clear operations.
+  5. **Feed & Search** ([`feed.service.ts`](./backend/src/modules/feed/feed.service.ts), [`search.service.ts`](./backend/src/modules/search/search.service.ts)):
+     - Feed supports cursor keyset pagination (`?cursor=...`) and offset pagination.
+     - Pure database PostgreSQL `ILIKE` search queries on `Upload.title` and `Channel.channelName`.
+     - Eliminates in-memory candidate arrays and N+1 queries. Autocomplete suggestions return distinct database matches.
+  6. **Administration & Schema Prerequisite** ([`admin.routes.ts`](./backend/src/modules/admin/admin.routes.ts)):
+     - Secure authorization enforced against server-configured `ADMIN_EMAILS` without fabricating schema roles.
+     - Non-admin callers receive `403 Forbidden` (`FORBIDDEN_ADMIN_ACCESS`).
+     - Documented schema limitation that `User` model currently lacks a `role` enum.
+  7. **Automated Test Suite**:
+     - Added 15 new unit and integration tests in [`coreRoutes.test.ts`](./backend/src/modules/coreRoutes.test.ts). Total backend suite now passes 71 tests across 6 files.
+
 ---
 
 ## 📊 Complete API Contract Status Matrix (91 Endpoints)
@@ -266,7 +298,7 @@ model Video {
 
 ---
 
-## 🧪 Automated Test Coverage (56 Tests Passing)
+## 🧪 Automated Test Coverage (71 Tests Passing)
 
 All tests execute via `bun test` in the `backend` directory:
 
@@ -337,7 +369,24 @@ src/modules/video/video.test.ts (14 tests)
 ✔ increments view count on first watch request
 ✔ debounces view counts within cooldown window and ignores polling requests
 
-TOTAL: 56 PASS, 0 FAIL (168 expect() assertions)
+src/modules/coreRoutes.test.ts (15 tests)
+✔ prevents creators from subscribing to their own channel with 400
+✔ subscribes to a channel and handles repeated subscribe calls idempotently
+✔ unsubscribes cleanly and repeated unsubscribe calls return predictable success
+✔ adds a LIKE and repeated PUT /like calls are idempotent
+✔ strictly blocks unauthorized users from reacting to a private video with 403
+✔ removes a like and repeated DELETE /like calls are idempotent
+✔ creates a comment and validates content length and whitespace
+✔ prevents unauthorized users from commenting on or viewing comments of private videos
+✔ allows comment author or video creator to delete a comment, but rejects strangers with 403
+✔ records playback progress and updates existing records safely
+✔ blocks unauthorized users from recording history on private videos with 403
+✔ removes video from history and clears history cleanly and idempotently
+✔ feed returns only public, completed, non-deleted videos and supports cursor pagination
+✔ search performs database lookup and autocomplete suggestions correctly
+✔ documents missing role model and enforces ADMIN_EMAILS boundary
+
+TOTAL: 71 PASS, 0 FAIL (203 expect() assertions across 6 test suites)
 ```
 
 ---
@@ -355,6 +404,7 @@ All work follows small, incremental commits on branch `dev`:
 | `0d56848` | `feat(queue): implement BullMQ video transcoding queue and worker foundation` | `transcodingWorker.ts`, `videoQueue.ts`, `videoQueue.test.ts` |
 | `f6d60f7` | `feat(transcoding): implement FFmpeg adaptive HLS transcoding pipeline and worker integration` | `transcodingProfiles.ts`, `processSpawner.ts`, `transcodingService.ts`, `transcodingService.test.ts` |
 | `074717f` | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
+| *pending* | `feat(core): implement core operations for subscriptions, reactions, comments, history, feed, search, and admin` | `subscription.service.ts`, `interaction.service.ts`, `comment.service.ts`, `watchHistory.service.ts`, `feed.service.ts`, `search.service.ts`, `admin.routes.ts`, `coreRoutes.test.ts` |
 
 ---
 

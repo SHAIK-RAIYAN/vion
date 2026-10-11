@@ -4,10 +4,33 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { AppError } from "../../utils/AppError";
 import { paginationSchema, getPaginationMeta } from "../../utils/pagination";
 
+import { ADMIN_EMAILS } from "../../config/config";
+
 const router = Router();
 const { User, Upload } = db.orm.public;
 
 // Section 17: ADMIN
+// Schema Prerequisite Note:
+// The fixed Prisma User model does not possess a 'role' column or 'isAdmin' flag.
+// To avoid implementing a fake schema check or bypassing security,
+// real administrator authorization is strictly enforced against server-configured ADMIN_EMAILS.
+router.use((req: Request, _res: Response, next) => {
+  if (!req.user) {
+    throw new AppError("Authentication required.", 401, "UNAUTHORIZED");
+  }
+
+  const userEmail = (req.user.email || "").toLowerCase();
+  if (ADMIN_EMAILS.length === 0 || !ADMIN_EMAILS.includes(userEmail)) {
+    throw new AppError(
+      "Admin privileges required. Your account is not configured in ADMIN_EMAILS.",
+      403,
+      "FORBIDDEN_ADMIN_ACCESS",
+    );
+  }
+
+  next();
+});
+
 // Users Management
 router.get(
   "/users",

@@ -6,66 +6,58 @@ const { Upload, Channel } = db.orm.public;
 export async function searchContent(query: string, pagination: Pagination) {
   const { page, limit } = pagination;
   const offset = (page - 1) * limit;
-  const normalizedQuery = (query || "").trim().toLowerCase();
+  const sanitizedQuery = (query || "").trim();
 
-  if (!normalizedQuery) {
+  if (!sanitizedQuery) {
     return {
       videos: [],
       channels: [],
+      items: [],
       pagination: getPaginationMeta(0, page, limit),
     };
   }
 
-  // Fetch candidate public videos
-  const [allVideos, channels] = await Promise.all([
+  // Pure database-driven queries avoiding in-memory array filtering and N+1 queries
+  const [videos, channels, countResult] = await Promise.all([
     Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
+      .where((u) => u.title.ilike(`%${sanitizedQuery}%`))
       .include("channel", (c) =>
         c.select("id", "handle", "channelName", "profilePictureUrl"),
       )
       .include("videos", (v) => v.select("id", "resolution", "url"))
-      .orderBy((u) => u.createdAt.desc())
-      .limit(100)
+      .orderBy([(u) => u.createdAt.desc(), (u) => u.id.desc()])
+      .limit(limit)
+      .offset(offset)
       .all(),
-    Channel.limit(20).all(),
+    Channel.where((c) => c.channelName.ilike(`%${sanitizedQuery}%`))
+      .limit(limit)
+      .all(),
+    Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
+      .where((u) => u.title.ilike(`%${sanitizedQuery}%`))
+      .aggregate((agg) => ({
+        count: agg.count(),
+      })),
   ]);
 
-  const matchedVideos = allVideos.filter(
-    (v) =>
-      v.title.toLowerCase().includes(normalizedQuery) ||
-      (v.description && v.description.toLowerCase().includes(normalizedQuery)),
-  );
-
-  const matchedChannels = channels.filter(
-    (c) =>
-      c.channelName.toLowerCase().includes(normalizedQuery) ||
-      c.handle.toLowerCase().includes(normalizedQuery),
-  );
-
-  const paginatedVideos = matchedVideos.slice(offset, offset + limit);
-
   return {
-    videos: paginatedVideos,
-    channels: matchedChannels,
-    items: paginatedVideos,
-    pagination: getPaginationMeta(matchedVideos.length, page, limit),
+    videos,
+    channels,
+    items: videos,
+    pagination: getPaginationMeta(countResult.count, page, limit),
   };
 }
 
 export async function getSuggestions(query: string) {
-  const normalizedQuery = (query || "").trim().toLowerCase();
-  if (!normalizedQuery) {
+  const sanitizedQuery = (query || "").trim();
+  if (!sanitizedQuery) {
     return [];
   }
 
   const videos = await Upload.where({ isDeleted: false, visibility: "PUBLIC", processingStatus: "COMPLETED" })
+    .where((u) => u.title.ilike(`%${sanitizedQuery}%`))
     .select("title")
-    .limit(50)
+    .limit(10)
     .all();
 
-  const suggestions = videos
-    .map((v) => v.title)
-    .filter((title) => title.toLowerCase().includes(normalizedQuery))
-    .slice(0, 10);
-
-  return suggestions;
+  return Array.from(new Set(videos.map((v) => v.title)));
 }

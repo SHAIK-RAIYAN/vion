@@ -17,10 +17,19 @@ export async function recordProgress(
     throw new AppError("Video ID is required.", 400);
   }
 
-  const upload = await Upload.where({ id: targetId, isDeleted: false }).first();
+  const upload = await Upload.where({ id: targetId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
   if (!upload) {
-    throw new AppError("Video not found.", 404);
+    throw new AppError("Video not found.", 404, "VIDEO_NOT_FOUND");
   }
+
+  // Authorization gate: Private videos cannot have watch history recorded by unauthorized users
+  if (upload.visibility === "PRIVATE" && upload.channel.userId !== userId) {
+    throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
+  }
+
+  const progress = Math.max(0, Math.floor(Number(input.progressTimeStamp) || 0));
 
   const existing = await WatchHistory.where({
     userId,
@@ -29,23 +38,49 @@ export async function recordProgress(
 
   if (existing) {
     const updated = await WatchHistory.where({ id: existing.id }).update({
-      progressTimeStamp: input.progressTimeStamp || 0,
+      progressTimeStamp: progress,
       watchedAt: new Date(),
     });
     return updated;
   }
 
-  const created = await WatchHistory.create({
-    userId,
-    uploadId: targetId,
-    progressTimeStamp: input.progressTimeStamp || 0,
-    watchedAt: new Date(),
-  });
-
-  return created;
+  try {
+    const created = await WatchHistory.create({
+      userId,
+      uploadId: targetId,
+      progressTimeStamp: progress,
+      watchedAt: new Date(),
+    });
+    return created;
+  } catch (err: any) {
+    // Handle concurrent unique constraint violation on @@unique([userId, uploadId])
+    const raceRecord = await WatchHistory.where({
+      userId,
+      uploadId: targetId,
+    }).first();
+    if (raceRecord) {
+      const updated = await WatchHistory.where({ id: raceRecord.id }).update({
+        progressTimeStamp: progress,
+        watchedAt: new Date(),
+      });
+      return updated;
+    }
+    throw err;
+  }
 }
 
 export async function getVideoProgress(userId: string, videoId: string) {
+  const upload = await Upload.where({ id: videoId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
+  if (!upload) {
+    throw new AppError("Video not found.", 404, "VIDEO_NOT_FOUND");
+  }
+
+  if (upload.visibility === "PRIVATE" && upload.channel.userId !== userId) {
+    throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
+  }
+
   const existing = await WatchHistory.where({ userId, uploadId: videoId }).first();
   if (!existing) {
     return {
@@ -62,7 +97,6 @@ export async function getVideoProgress(userId: string, videoId: string) {
   };
 }
 
-
 export async function getWatchHistory(userId: string, pagination: Pagination) {
   const { page, limit } = pagination;
   const offset = (page - 1) * limit;
@@ -77,7 +111,7 @@ export async function getWatchHistory(userId: string, pagination: Pagination) {
             c.select("id", "handle", "channelName", "profilePictureUrl"),
           ),
       )
-      .orderBy((w) => w.watchedAt.desc())
+      .orderBy([(w) => w.watchedAt.desc(), (w) => w.id.desc()])
       .limit(limit)
       .offset(offset)
       .all(),
@@ -98,15 +132,16 @@ export async function removeFromWatchHistory(
 ) {
   const existing = await WatchHistory.where({ userId, uploadId }).first();
   if (!existing) {
-    throw new AppError("Watch history record not found.", 404);
+    // Idempotent: repeated removals succeed predictably
+    return { message: "Item removed from watch history successfully", success: true };
   }
 
   await WatchHistory.where({ id: existing.id }).delete();
 
-  return { message: "Item removed from watch history successfully" };
+  return { message: "Item removed from watch history successfully", success: true };
 }
 
 export async function clearWatchHistory(userId: string) {
   await WatchHistory.where({ userId }).delete();
-  return { message: "Watch history cleared successfully" };
+  return { message: "Watch history cleared successfully", success: true };
 }

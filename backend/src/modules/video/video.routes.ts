@@ -38,7 +38,7 @@ router.get("/:videoId/like", optionalAuthMiddleware, getVideoLikeStatus);
 
 // Section 10: COMMENTS (Video-scoped)
 router.post("/:videoId/comments", authMiddleware, createVideoComment);
-router.get("/:videoId/comments", getVideoComments);
+router.get("/:videoId/comments", optionalAuthMiddleware, getVideoComments);
 
 // Section 14: THUMBNAILS
 router.post("/:videoId/thumbnails/presigned-url", authMiddleware, getThumbnailPresignedUrl);

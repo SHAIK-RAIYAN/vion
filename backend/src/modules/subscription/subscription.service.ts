@@ -16,25 +16,41 @@ export async function subscribe(channelId: string, subscriberId: string) {
 
   const existing = await Subscription.where({ channelId, subscriberId }).first();
   if (existing) {
-    throw new AppError("Already subscribed to this channel.", 409);
+    // Idempotent: Repeated subscribe requests return the active subscription predictably
+    return existing;
   }
 
-  const subscription = await Subscription.create({
-    channelId,
-    subscriberId,
-  });
-
-  return subscription;
+  try {
+    const subscription = await Subscription.create({
+      channelId,
+      subscriberId,
+    });
+    return subscription;
+  } catch (err: any) {
+    // Under concurrent race conditions where two requests hit create() simultaneously,
+    // handle unique constraint violation ([channelId, subscriberId]) by returning the record
+    const raceRecord = await Subscription.where({ channelId, subscriberId }).first();
+    if (raceRecord) {
+      return raceRecord;
+    }
+    throw err;
+  }
 }
 
 export async function unsubscribe(channelId: string, subscriberId: string) {
+  const channel = await Channel.first({ id: channelId });
+  if (!channel) {
+    throw new AppError("Channel not found.", 404);
+  }
+
   const existing = await Subscription.where({ channelId, subscriberId }).first();
   if (!existing) {
-    throw new AppError("Not subscribed to this channel.", 404);
+    // Idempotent: Repeated unsubscribe calls return predictable success state
+    return { success: true, unsubscribed: false };
   }
 
   await Subscription.where({ id: existing.id }).delete();
-  return { success: true };
+  return { success: true, unsubscribed: true };
 }
 
 export async function toggleSubscription(
@@ -83,7 +99,7 @@ export async function getMySubscriptions(
       .include("channel", (c) =>
         c.select("id", "handle", "channelName", "profilePictureUrl", "description"),
       )
-      .orderBy((s) => s.createdAt.desc())
+      .orderBy([(s) => s.createdAt.desc(), (s) => s.id.desc()])
       .limit(limit)
       .offset(offset)
       .all(),
@@ -110,7 +126,7 @@ export async function getChannelSubscribers(
       .include("subscriber", (s) =>
         s.select("id", "firstName", "lastName"),
       )
-      .orderBy((s) => s.createdAt.desc())
+      .orderBy([(s) => s.createdAt.desc(), (s) => s.id.desc()])
       .limit(limit)
       .offset(offset)
       .all(),

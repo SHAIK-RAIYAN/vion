@@ -5,7 +5,11 @@ import * as feedService from "./feed.service";
 
 export const getFeed = asyncHandler(async (req: Request, res: Response) => {
   const pagination = paginationSchema.parse(req.query);
-  const result = await feedService.getFeed(pagination, req.user?.id);
+  const cursor = req.query.cursor ? String(req.query.cursor) : undefined;
+  const result = await feedService.getFeed(
+    { ...pagination, cursor },
+    req.user?.id,
+  );
 
   res.status(200).json({
     success: true,

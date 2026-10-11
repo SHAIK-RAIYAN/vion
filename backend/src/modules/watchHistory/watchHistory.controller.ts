@@ -4,19 +4,23 @@ import { AppError } from "../../utils/AppError";
 import { paginationSchema } from "../../utils/pagination";
 import * as watchHistoryService from "./watchHistory.service";
 
+import { updateProgressSchema } from "./watchHistory.schema";
+
 const recordProgress = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     throw new AppError("Unauthorized.", 401);
   }
 
   const { videoId, uploadId } = req.params;
-  const targetId = videoId || uploadId || req.body.uploadId || req.body.videoId;
+  const targetId = videoId || uploadId || req.body?.uploadId || req.body?.videoId;
+
+  const parsed = updateProgressSchema.parse(req.body || {});
 
   const record = await watchHistoryService.recordProgress(
     req.user.id,
     {
       videoId: targetId,
-      progressTimeStamp: req.body.progressTimeStamp || 0,
+      progressTimeStamp: parsed.progressTimeStamp,
     },
   );
   res.status(200).json({

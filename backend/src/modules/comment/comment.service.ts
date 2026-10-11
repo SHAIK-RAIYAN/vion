@@ -17,9 +17,16 @@ export async function createComment(
 ) {
   const data = createCommentSchema.parse(input);
 
-  const upload = await Upload.where({ id: uploadId, isDeleted: false }).first();
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
   if (!upload) {
-    throw new AppError("Video not found.", 404);
+    throw new AppError("Video not found.", 404, "VIDEO_NOT_FOUND");
+  }
+
+  // Authorization gate: Private videos cannot receive comments from unauthorized users
+  if (upload.visibility === "PRIVATE" && upload.channel.userId !== userId) {
+    throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
   }
 
   const comment = await Comment.create({
@@ -34,10 +41,20 @@ export async function createComment(
 export async function getCommentsByUpload(
   uploadId: string,
   pagination: Pagination,
+  currentUserId?: string,
 ) {
-  const upload = await Upload.where({ id: uploadId, isDeleted: false }).first();
+  const upload = await Upload.where({ id: uploadId, isDeleted: false })
+    .include("channel", (c) => c.select("id", "userId"))
+    .first();
   if (!upload) {
-    throw new AppError("Video not found.", 404);
+    throw new AppError("Video not found.", 404, "VIDEO_NOT_FOUND");
+  }
+
+  // Authorization gate: Comments on private videos are restricted to video owner
+  if (upload.visibility === "PRIVATE") {
+    if (!currentUserId || upload.channel.userId !== currentUserId) {
+      throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
+    }
   }
 
   const { page, limit } = pagination;
@@ -52,7 +69,7 @@ export async function getCommentsByUpload(
             c.select("id", "handle", "channelName", "profilePictureUrl"),
           ),
       )
-      .orderBy((c) => c.createdAt.desc())
+      .orderBy([(c) => c.createdAt.desc(), (c) => c.id.desc()])
       .limit(limit)
       .offset(offset)
       .all(),
@@ -76,11 +93,11 @@ export async function updateComment(
 
   const comment = await Comment.first({ id: commentId });
   if (!comment) {
-    throw new AppError("Comment not found.", 404);
+    throw new AppError("Comment not found.", 404, "COMMENT_NOT_FOUND");
   }
 
   if (comment.userId !== userId) {
-    throw new AppError("You can only edit your own comment.", 403);
+    throw new AppError("You can only edit your own comment.", 403, "FORBIDDEN");
   }
 
   const updated = await Comment.where({ id: commentId }).update({
@@ -98,7 +115,7 @@ export async function deleteComment(commentId: string, userId: string) {
     .first();
 
   if (!comment) {
-    throw new AppError("Comment not found.", 404);
+    throw new AppError("Comment not found.", 404, "COMMENT_NOT_FOUND");
   }
 
   const isAuthor = comment.userId === userId;
@@ -108,25 +125,36 @@ export async function deleteComment(commentId: string, userId: string) {
     throw new AppError(
       "You do not have permission to delete this comment.",
       403,
+      "FORBIDDEN",
     );
   }
 
   await Comment.where({ id: commentId }).delete();
 
-  return { message: "Comment deleted successfully" };
+  return { message: "Comment deleted successfully", success: true };
 }
 
-export async function getCommentById(commentId: string) {
+export async function getCommentById(commentId: string, currentUserId?: string) {
   const comment = await Comment.where({ id: commentId })
     .include("user", (u) =>
       u.select("id", "firstName", "lastName").include("channel", (c) =>
         c.select("id", "handle", "channelName", "profilePictureUrl"),
       ),
     )
+    .include("upload", (u) =>
+      u.include("channel", (c) => c.select("id", "userId")),
+    )
     .first();
 
   if (!comment) {
-    throw new AppError("Comment not found.", 404);
+    throw new AppError("Comment not found.", 404, "COMMENT_NOT_FOUND");
+  }
+
+  // Authorization gate: Do not expose comments on private videos to unauthorized callers
+  if (comment.upload.visibility === "PRIVATE") {
+    if (!currentUserId || comment.upload.channel.userId !== currentUserId) {
+      throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
+    }
   }
 
   return comment;

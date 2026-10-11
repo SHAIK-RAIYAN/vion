@@ -13,6 +13,7 @@ const envSchema = z.object({
   JWT_SECRET_KEY: z.string().default("vion_secret_key_change_me_in_production"),
   FRONTEND_URL: z.string().default("http://localhost:3000"),
   GOOGLE_CLIENT_ID: z.string().default(""),
+  ADMIN_EMAILS: z.string().default(""), // Comma-separated admin email list
 
   // Supabase Object Storage
   SUPABASE_URL: z.string().default(""),
@@ -53,6 +54,10 @@ export const SALT_ROUNDS = Number(env.SALT_ROUNDS) || 10;
 export const JWT_SECRET = env.JWT_SECRET_KEY || "vion_secret_key_change_me_in_production";
 export const FRONTEND_URL = env.FRONTEND_URL || "http://localhost:3000";
 export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
+export const ADMIN_EMAILS = (env.ADMIN_EMAILS || process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((e: string) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 // Supabase Storage Configuration
 export const SUPABASE_URL = env.SUPABASE_URL || "";
