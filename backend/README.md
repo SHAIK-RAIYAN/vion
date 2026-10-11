@@ -89,6 +89,26 @@ The `POST /api/v1/uploads/:uploadId/finalize` endpoint enforces that:
 
 ---
 
+## 🖼️ Media Inspection (FFprobe) & Thumbnail Generation (FFmpeg)
+
+### 1. What FFprobe does
+FFprobe probes container headers, packet streams, and elementary track descriptors without decoding the entire video stream into raw uncompressed pixels. This allows the backend to instantaneously (< 50ms) verify video duration, resolution, frame rate, audio channel layouts, and container codecs before dedicating compute resources to heavy multi-bitrate transcoding. Corrupt files, 0-second containers, non-video payloads, and unsupported codecs are rejected immediately with descriptive errors.
+
+### 2. Why thumbnails are generated before the page is rendered
+Video streaming applications require image posters before playback begins:
+- **Card and Feed Previews**: Home feeds and search result cards display static poster images without streaming multi-megabyte video containers.
+- **Player Poster Placeholders**: The HTML5 player uses a `<video poster="...">` placeholder image while initial HLS chunks buffer.
+- **Social Sharing**: OpenGraph and Twitter cards require high-resolution image previews.
+
+### 3. Why temporary files must be cleaned up
+Extracting frames, probing media, and downloading raw files produces scratch files on disk. If left behind after errors or normal completion, temporary files will rapidly exhaust available disk space (causing `ENOSPC` file system errors) and take down the server. The `makeThumbnails` pipeline wraps all intermediate scratch directories in a `try ... finally` block, ensuring immediate and guaranteed deletion of temporary files.
+
+### 4. Schema Constraints on Thumbnails
+The Vion PostgreSQL schema stores a single `Upload.thumbnailUrl` string. It intentionally does not maintain a separate database table for thumbnail metadata.
+To support candidate thumbnail selection and listing, `listStoredThumbnails` securely lists objects beneath the controlled storage prefix `thumbnails/${channelId}/${videoId}/` in Supabase Storage. This delivers candidate thumbnail listings without inventing unmapped database tables.
+
+---
+
 ## 🎬 Upload API Endpoints (`/api/v1/uploads`)
 
 | Method | Endpoint | Description | Auth |

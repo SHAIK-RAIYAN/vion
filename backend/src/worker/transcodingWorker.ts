@@ -13,6 +13,7 @@ import {
   FFPROBE_PATH,
 } from "../config/config";
 import * as storageService from "../services/storageService";
+import * as mediaService from "../services/mediaService";
 
 const { Upload, Video } = db.orm.public;
 
@@ -46,12 +47,22 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
     console.info(`[Worker] Verifying raw asset in Supabase bucket '${STORAGE_RAW_BUCKET}' at key: ${rawVideoKey}`);
     console.info(`[Worker] Configured media tools: FFmpeg='${FFMPEG_PATH}', FFprobe='${FFPROBE_PATH}'`);
 
-    // In future milestone:
-    // a. Download raw video stream to temporary scratch folder (TEMP_MEDIA_DIR)
-    // b. Probe video format/resolution/duration using ffprobe
-    // c. Transcode into multi-bitrate HLS ladders (1080p, 720p, 480p, 360p) using ffmpeg
-    // d. Upload generated .m3u8 manifests and .ts segments to STORAGE_PROCESSED_BUCKET
-    // e. Register Video resolution records in Neon DB
+    // Generate candidate thumbnails and set default thumbnail if missing
+    if (!upload.thumbnailUrl) {
+      try {
+        console.info(`[Worker] Generating candidate thumbnails for upload ${uploadId}...`);
+        const thumbResult = await mediaService.makeThumbnails({
+          uploadId,
+          channelId,
+          sourceStorageKey: rawVideoKey,
+          updateDatabase: true,
+        });
+        console.info(`[Worker] Default thumbnail set: ${thumbResult.defaultThumbnailUrl}`);
+      } catch (thumbErr: any) {
+        console.warn(`[Worker] Thumbnail generation notice for upload ${uploadId}:`, thumbErr.message);
+      }
+    }
+
     await job.updateProgress(50);
 
     // Compute expected master playlist path in processed bucket

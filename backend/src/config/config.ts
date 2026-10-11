@@ -86,7 +86,9 @@ export function isStorageConfigured(): boolean {
   return Boolean(
     SUPABASE_URL &&
     SUPABASE_URL.startsWith("http") &&
+    !SUPABASE_URL.includes("your-project-id") &&
     SUPABASE_SERVICE_ROLE_KEY &&
+    !SUPABASE_SERVICE_ROLE_KEY.includes("your-supabase-service-role-key") &&
     SUPABASE_SERVICE_ROLE_KEY.length > 20,
   );
 }

@@ -4,6 +4,7 @@ import { AppError } from "../../utils/AppError";
 import { paginationSchema } from "../../utils/pagination";
 import * as videoService from "./video.service";
 import * as commentService from "../comment/comment.service";
+import * as mediaService from "../../services/mediaService";
 
 const publishVideo = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
@@ -251,10 +252,25 @@ const getThumbnails = asyncHandler(async (req: Request, res: Response) => {
   }
 
   const video = await videoService.getVideoById(targetId, req.user?.id);
+  const stored = await mediaService.listStoredThumbnails(video.channel.id, targetId);
+
+  const thumbnails = stored.thumbnails.map((t) => ({
+    id: t.name,
+    name: t.name,
+    url: t.url,
+    sizeBytes: t.sizeBytes,
+    isActive: t.url === video.thumbnailUrl || (t.name === "default.jpg" && Boolean(video.thumbnailUrl)),
+  }));
+
   res.status(200).json({
     success: true,
-    message: "Thumbnails fetched",
-    data: video.thumbnailUrl ? [{ id: "default", url: video.thumbnailUrl, isActive: true }] : [],
+    message: "Thumbnails fetched successfully",
+    data:
+      thumbnails.length > 0
+        ? thumbnails
+        : video.thumbnailUrl
+          ? [{ id: "default", name: "default.jpg", url: video.thumbnailUrl, isActive: true }]
+          : [],
   });
 });
 
