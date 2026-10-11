@@ -404,7 +404,7 @@ All work follows small, incremental commits on branch `dev`:
 | `0d56848` | `feat(queue): implement BullMQ video transcoding queue and worker foundation` | `transcodingWorker.ts`, `videoQueue.ts`, `videoQueue.test.ts` |
 | `f6d60f7` | `feat(transcoding): implement FFmpeg adaptive HLS transcoding pipeline and worker integration` | `transcodingProfiles.ts`, `processSpawner.ts`, `transcodingService.ts`, `transcodingService.test.ts` |
 | `074717f` | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
-| *pending* | `feat(core): implement core operations for subscriptions, reactions, comments, history, feed, search, and admin` | `subscription.service.ts`, `interaction.service.ts`, `comment.service.ts`, `watchHistory.service.ts`, `feed.service.ts`, `search.service.ts`, `admin.routes.ts`, `coreRoutes.test.ts` |
+| `b4a1469` | `feat(core): implement core operations for subscriptions, reactions, comments, history, feed, search, and admin` | `subscription.service.ts`, `interaction.service.ts`, `comment.service.ts`, `watchHistory.service.ts`, `feed.service.ts`, `search.service.ts`, `admin.routes.ts`, `coreRoutes.test.ts` |
 
 ---
 
