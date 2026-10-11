@@ -33,6 +33,10 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
   return upload;
 }
 
+import * as storageService from "../../services/storageService";
+import { isStorageConfigured, STORAGE_RAW_BUCKET } from "../../config/config";
+import { enqueueTranscodeJob } from "../../queue/videoQueue";
+
 export async function createPresignedUrl(
   input: { fileName: string; contentType: string; fileSize?: number },
   userId: string,
@@ -42,15 +46,25 @@ export async function createPresignedUrl(
     throw new AppError("You must create a channel before uploading videos.", 400);
   }
 
-  // Upload storage key pattern
+  // Server-generated storage layout path
   const uploadId = crypto.randomUUID();
-  const sanitizedFileName = input.fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const key = `raw/${channel.id}/${uploadId}/${sanitizedFileName}`;
+  const key = storageService.generateRawVideoKey(channel.id, uploadId, input.fileName);
 
-  // If R2 credentials are not yet configured by user, provide the canonical presigned structure
-  const uploadUrl = process.env.R2_PUBLIC_URL
-    ? `${process.env.R2_PUBLIC_URL}/${key}`
-    : `https://storage.vion.local/${key}`;
+  let uploadUrl = "";
+  let uploadToken = "";
+
+  if (isStorageConfigured()) {
+    try {
+      const signed = await storageService.createSignedUploadUrl(STORAGE_RAW_BUCKET, key);
+      uploadUrl = signed.signedUrl;
+      uploadToken = signed.token;
+    } catch (err: any) {
+      console.warn("Supabase Storage signed URL warning:", err.message);
+      uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
+    }
+  } else {
+    uploadUrl = `https://storage.vion.local/${STORAGE_RAW_BUCKET}/${key}`;
+  }
 
   const upload = await Upload.create({
     id: uploadId,
@@ -64,6 +78,8 @@ export async function createPresignedUrl(
     uploadId: upload.id,
     uploadUrl,
     key,
+    bucket: STORAGE_RAW_BUCKET,
+    token: uploadToken,
     method: "PUT",
     headers: {
       "Content-Type": input.contentType,
@@ -71,6 +87,7 @@ export async function createPresignedUrl(
     expiresInSeconds: 3600,
   };
 }
+
 
 export async function createRemoteUrlUpload(
   input: { url: string; title: string; description?: string },
@@ -125,7 +142,7 @@ export async function getUploadStatus(uploadId: string, userId: string) {
   };
 }
 
-export async function finalizeUpload(uploadId: string, userId: string) {
+export async function finalizeUpload(uploadId: string, userId: string, storageKey?: string) {
   const upload = await Upload.where({ id: uploadId, isDeleted: false })
     .include("channel", (c) => c.select("id", "userId"))
     .first();
@@ -147,10 +164,22 @@ export async function finalizeUpload(uploadId: string, userId: string) {
     throw new AppError("Failed to finalize upload.", 500);
   }
 
+  // Derive storage key if not explicitly passed
+  const effectiveKey = storageKey || `raw/${upload.channel.id}/${uploadId}/video.mp4`;
+
+  // Enqueue background transcoding job into BullMQ
+  const job = await enqueueTranscodeJob({
+    uploadId: updated.id,
+    channelId: upload.channel.id,
+    rawVideoKey: effectiveKey,
+    title: upload.title,
+  });
+
   return {
     uploadId: updated.id,
     status: updated.processingStatus,
-    message: "Raw upload finalized. Video queued for transcoding processing.",
+    jobId: job ? job.id : null,
+    message: "Raw upload finalized. Video queued for background transcoding.",
   };
 }
 
