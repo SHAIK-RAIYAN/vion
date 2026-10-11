@@ -109,6 +109,83 @@ To support candidate thumbnail selection and listing, `listStoredThumbnails` sec
 
 ---
 
+## 🎥 FFmpeg Transcoding and Adaptive Video Quality (HLS)
+
+Vion implements an on-demand, adaptive bitrate streaming pipeline adhering to RFC 8216 and Apple's HLS Authoring Guidelines.
+
+### 1. Core Concepts in Simple English
+- **Resolution**: The pixel dimensions of each video frame (e.g. `1920x1080` for 1080p, `1280x720` for 720p).
+- **Bitrate**: How much media data the stream transfers per second (e.g. `2,500 kbps`). Higher bitrates preserve fine detail and reduce compression artifacts on high-bandwidth connections.
+- **Rendition**: One specific quality and bitrate version of a video tailored for a specific network tier.
+- **Transcoding**: Converting the source video from its original raw encoding into multiple standardized H.264/AAC rendition packages.
+
+### 2. What Is Expensive vs What Happens Once
+- **Heavy & CPU-Intensive (Transcoding)**: Re-encoding raw video frames into multiple resolutions and bitrates using `libx264`. This is why transcoding runs exclusively in the background BullMQ worker rather than blocking the Express API.
+- **Fast (< 50ms)**: FFprobe container inspection, thumbnail frame extraction, master playlist generation, and database status updates.
+- **Run Once Per Upload**: The transcoding pipeline is strictly idempotent. Once an upload is marked `COMPLETED`, subsequent job invocations or API finalize calls skip re-encoding immediately.
+
+### 3. Quality Ladder & Anti-Upscaling Rules
+The quality ladder is defined in `src/config/transcodingProfiles.ts`:
+
+| Rendition | Resolution | Video Bitrate | Peak (Maxrate) | Buffer (Bufsize) | Audio Bitrate | Target Bandwidth |
+|---|---|---|---|---|---|---|
+| **1080p** | `1920x1080` | `4500 kbps` | `5000 kbps` | `9000 kbps` | `128 kbps` | `5.2 Mbps` |
+| **720p** | `1280x720` | `2500 kbps` | `2800 kbps` | `5000 kbps` | `128 kbps` | `2.95 Mbps` |
+| **480p** | `854x480` | `1200 kbps` | `1400 kbps` | `2400 kbps` | `96 kbps` | `1.45 Mbps` |
+| **360p** | `640x360` | `700 kbps` | `800 kbps` | `1400 kbps` | `96 kbps` | `890 kbps` |
+
+> **Anti-Upscaling Guarantee**: The pipeline **never upscales** lower-resolution sources. A 480p source will only generate `480p` and `360p` renditions. If a video is submitted below 360p (e.g. 240p), the pipeline dynamically creates a custom baseline rendition matching the source dimensions.
+
+### 4. Apple HLS Authoring Best Practices
+1. **Target Segment Duration**: ~6 seconds (`-hls_time 6`), balancing caching efficiency with playback startup latency.
+2. **Synchronized Keyframe (GOP) Alignment**: 
+   - `-g <fps * 6> -keyint_min <fps * 6>`: Forces keyframes at exact 6-second boundaries.
+   - `-sc_threshold 0`: Prevents scene changes from inserting extra keyframes that misalign segment boundaries between different qualities.
+   - Keyframe alignment allows players (such as Safari AVPlayer or Hls.js) to switch smoothly between 360p and 1080p without visual freezes or buffering.
+3. **Independent Segments**: `-hls_flags independent_segments` marks every segment as independently decodable without depending on previous segments.
+4. **Master Playlist Formatting**:
+   Renditions are declared with `#EXT-X-STREAM-INF:` in descending order of bandwidth, detailing `RESOLUTION`, `BANDWIDTH`, `AVERAGE-BANDWIDTH`, `FRAME-RATE`, and `CODECS`:
+   ```m3u8
+   #EXTM3U
+   #EXT-X-VERSION:3
+   #EXT-X-INDEPENDENT-SEGMENTS
+
+   #EXT-X-STREAM-INF:BANDWIDTH=5200000,AVERAGE-BANDWIDTH=4800000,RESOLUTION=1920x1080,FRAME-RATE=30.000,CODECS="avc1.4d4028,mp4a.40.2"
+   1080p/index.m3u8
+   #EXT-X-STREAM-INF:BANDWIDTH=2950000,AVERAGE-BANDWIDTH=2650000,RESOLUTION=1280x720,FRAME-RATE=30.000,CODECS="avc1.4d401f,mp4a.40.2"
+   720p/index.m3u8
+   ```
+
+### 5. Safe Process Execution & Example FFmpeg Arguments
+The pipeline executes external binaries exclusively using `spawnProcess()` in `src/utils/processSpawner.ts` passing a validated array of arguments (never passing unescaped shell strings):
+
+```bash
+ffmpeg \
+  -i input.mp4 \
+  -map 0:v:0 -c:v libx264 -preset veryfast -profile:v main -pix_fmt yuv420p \
+  -b:v 2500k -maxrate 2800k -bufsize 5000k \
+  -vf "scale=-2:720" \
+  -g 180 -keyint_min 180 -sc_threshold 0 -force_key_frames "expr:gte(t,n_forced*6)" \
+  -map 0:a:0 -c:a aac -b:a 128k -ar 48000 -ac 2 \
+  -hls_time 6 \
+  -hls_playlist_type vod \
+  -hls_segment_type mpegts \
+  -hls_flags independent_segments \
+  -hls_list_size 0 \
+  -hls_segment_filename "720p/segment_%03d.ts" \
+  -y "720p/index.m3u8"
+```
+
+**Options Explained**:
+- `-vf scale=-2:720`: Scales proportionally to 720p height while ensuring the width is an even number (required by `yuv420p` chroma subsampling).
+- `-g 180 -keyint_min 180`: Places an IDR keyframe every 180 frames (6 seconds at 30 fps).
+- `-sc_threshold 0`: Disables scene cut detection to maintain strict keyframe cadence.
+- `-hls_playlist_type vod`: Writes `#EXT-X-PLAYLIST-TYPE:VOD` and terminates the playlist with `#EXT-X-ENDLIST`.
+- `-hls_flags independent_segments`: Adds `#EXT-X-INDEPENDENT-SEGMENTS` so each chunk can decode standalone.
+
+---
+
+
 ## 🎬 Upload API Endpoints (`/api/v1/uploads`)
 
 | Method | Endpoint | Description | Auth |

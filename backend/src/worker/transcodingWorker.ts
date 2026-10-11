@@ -14,6 +14,7 @@ import {
 } from "../config/config";
 import * as storageService from "../services/storageService";
 import * as mediaService from "../services/mediaService";
+import * as transcodingService from "../services/transcodingService";
 
 const { Upload } = db.orm.public;
 
@@ -80,7 +81,7 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
     }
 
     // 4. Stage: Run media processing service (thumbnails & inspection)
-    await job.updateProgress(35);
+    await job.updateProgress(25);
     console.info(`${logPrefix} Running media-inspection and thumbnail generation (FFmpeg: ${FFMPEG_PATH})...`);
     let activeThumbnailUrl = upload.thumbnailUrl;
 
@@ -97,28 +98,29 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
       console.warn(`${logPrefix} Thumbnail extraction notice: ${thumbErr.message}`);
     }
 
-    await job.updateProgress(75);
-
-    // 5. Stage: Generate HLS delivery paths
-    const hlsMasterPath = storageService.generateHlsMasterPlaylistPath(channelId, uploadId);
-    const manifestUrl = isStorageConfigured()
-      ? storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, hlsMasterPath)
-      : `https://storage.vion.local/${STORAGE_PROCESSED_BUCKET}/${hlsMasterPath}`;
-
-    // 6. Stage: Record success in existing database fields
-    await Upload.where({ id: uploadId }).update({
-      processingStatus: "COMPLETED",
-      hlsManifestUrl: manifestUrl,
-      ...(activeThumbnailUrl ? { thumbnailUrl: activeThumbnailUrl } : {}),
+    // 5. Stage: Run multi-bitrate HLS adaptive transcoding pipeline
+    console.info(`${logPrefix} Starting adaptive HLS transcoding pipeline (FFmpeg: ${FFMPEG_PATH})...`);
+    const transcodeResult = await transcodingService.processVideoHlsPipeline({
+      uploadId,
+      channelId,
+      sourceStorageKey: rawVideoKey,
+      activeThumbnailUrl: activeThumbnailUrl || undefined,
+      onProgress: async (stage, pct) => {
+        // Map pipeline progress (0-100) into BullMQ job progress (30-95)
+        const jobPct = 30 + Math.round(pct * 0.65);
+        await job.updateProgress(jobPct);
+      },
     });
 
     await job.updateProgress(100);
-    console.info(`${logPrefix} Transcode job completed successfully. Manifest: ${manifestUrl}`);
+    console.info(
+      `${logPrefix} Transcode job completed successfully. Manifest: ${transcodeResult.masterManifestUrl} (${transcodeResult.renditions.length} renditions)`,
+    );
 
     return {
       success: true,
       uploadId,
-      manifestUrl,
+      manifestUrl: transcodeResult.masterManifestUrl,
       thumbnailUrl: activeThumbnailUrl || undefined,
     };
   } catch (err: any) {

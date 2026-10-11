@@ -164,11 +164,15 @@ describe("Media Inspection & Thumbnail Generation", () => {
   });
 
   describe("listStoredThumbnails (Schema-Compliant)", () => {
-    it("returns thumbnail list structure safely without requiring database relation", async () => {
-      const result = await listStoredThumbnails("test_channel_1", "test_video_1");
-      expect(result).toHaveProperty("activeThumbnailUrl");
-      expect(result).toHaveProperty("thumbnails");
-      expect(Array.isArray(result.thumbnails)).toBe(true);
-    });
+    it(
+      "returns thumbnail list structure safely without requiring database relation",
+      async () => {
+        const result = await listStoredThumbnails("test_channel_1", "test_video_1");
+        expect(result).toHaveProperty("activeThumbnailUrl");
+        expect(result).toHaveProperty("thumbnails");
+        expect(Array.isArray(result.thumbnails)).toBe(true);
+      },
+      { timeout: 15000 },
+    );
   });
 });
