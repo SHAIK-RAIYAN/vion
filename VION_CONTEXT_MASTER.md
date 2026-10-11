@@ -354,7 +354,7 @@ All work follows small, incremental commits on branch `dev`:
 | `c0e853f` | `feat(media): implement FFprobe video inspection and FFmpeg thumbnail generation` | `mediaService.ts`, `mediaService.test.ts` |
 | `0d56848` | `feat(queue): implement BullMQ video transcoding queue and worker foundation` | `transcodingWorker.ts`, `videoQueue.ts`, `videoQueue.test.ts` |
 | `f6d60f7` | `feat(transcoding): implement FFmpeg adaptive HLS transcoding pipeline and worker integration` | `transcodingProfiles.ts`, `processSpawner.ts`, `transcodingService.ts`, `transcodingService.test.ts` |
-| *pending* | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
+| `074717f` | `feat(playback): implement publication gate, HLS playback delivery, view debouncing, and private authorization` | `video.service.ts`, `video.controller.ts`, `video.routes.ts`, `feed.service.ts`, `search.service.ts`, `video.test.ts` |
 
 ---
 
