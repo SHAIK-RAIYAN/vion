@@ -12,7 +12,13 @@ import { toast } from "sonner";
 import { animateModalIn, animateModalOut } from "@/lib/gsap";
 
 export function AuthModal() {
-  const { isAuthModalOpen, closeAuthModal, authModalTab, refreshUser } = useAuth();
+  const {
+    isAuthModalOpen,
+    closeAuthModal,
+    authModalTab,
+    refreshUser,
+    setSessionUser,
+  } = useAuth();
 
   const [tab, setTab] = useState<"signin" | "signup">(authModalTab);
   const [loading, setLoading] = useState(false);
@@ -70,15 +76,23 @@ export function AuthModal() {
 
     setLoading(true);
     try {
-      await api.auth.signin({ email, password });
+      const res: any = await api.auth.signin({ email, password });
       setSuccessMessage("Welcome back to Vion!");
-      await refreshUser();
+
+      // Update shared auth state immediately from response
+      const verifiedUser = res.user || res.data?.user;
+      if (verifiedUser) {
+        setSessionUser(verifiedUser);
+      } else {
+        await refreshUser();
+      }
+
       setTimeout(() => {
         handleClose();
         setEmail("");
         setPassword("");
         setLoading(false);
-      }, 700);
+      }, 500);
     } catch (err: any) {
       toast.error(err.message || "Failed to sign in");
       setLoading(false);
@@ -102,12 +116,18 @@ export function AuthModal() {
         gender,
       });
       setSuccessMessage("Account created! Logging you in...");
-      await api.auth.signin({ email, password });
-      await refreshUser();
+      const res: any = await api.auth.signin({ email, password });
+      const verifiedUser = res.user || res.data?.user;
+      if (verifiedUser) {
+        setSessionUser(verifiedUser);
+      } else {
+        await refreshUser();
+      }
+
       setTimeout(() => {
         handleClose();
         setLoading(false);
-      }, 800);
+      }, 600);
     } catch (err: any) {
       toast.error(err.message || "Failed to sign up");
       setLoading(false);
@@ -117,17 +137,21 @@ export function AuthModal() {
   const handleGoogleSuccess = async (idToken: string) => {
     setLoading(true);
     try {
-      const res = await api.auth.google(idToken);
+      const res: any = await api.auth.google(idToken);
       setSuccessMessage(
         res.data?.firstName
           ? `Welcome to Vion, ${res.data.firstName}!`
           : "Google authentication successful!",
       );
-      await refreshUser();
+      if (res.data || res.user) {
+        setSessionUser(res.data || res.user);
+      } else {
+        await refreshUser();
+      }
       setTimeout(() => {
         handleClose();
         setLoading(false);
-      }, 750);
+      }, 500);
     } catch (err: any) {
       toast.error(err.message || "Google authentication failed");
       setLoading(false);

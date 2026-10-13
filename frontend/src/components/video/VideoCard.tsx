@@ -3,7 +3,6 @@
 import React from "react";
 import Link from "next/link";
 import type { Upload } from "@/types/api";
-import { Badge } from "@/components/ui/badge";
 import { Play, User as UserIcon } from "lucide-react";
 
 interface VideoCardProps {
@@ -20,130 +19,101 @@ function formatViews(views: number): string {
   return `${views} views`;
 }
 
-function formatTimeAgo(dateString: string): string {
+function formatCardDate(dateString: string): string {
   try {
-    const diffMs = Date.now() - new Date(dateString).getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-
-    if (diffDay > 30) {
-      return new Date(dateString).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-      });
-    }
-    if (diffDay > 0) return `${diffDay}d ago`;
-    if (diffHour > 0) return `${diffHour}h ago`;
-    if (diffMin > 0) return `${diffMin}m ago`;
-    return "just now";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "October 2026";
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
   } catch {
-    return "";
+    return "October 2026";
   }
 }
 
 export function VideoCard({ video }: VideoCardProps) {
-  const topResolution = video.videos?.[0]?.resolution;
+  const topResolution = video.videos?.[0]?.resolution || "4K";
+  const dateText = formatCardDate(video.createdAt);
+  const channelName = video.channel?.channelName || "Creator";
 
   return (
-    <div className="group flex flex-col gap-2.5 rounded-xl transition-all duration-200">
-      {/* Thumbnail Aspect Box */}
+    <div className="group flex flex-col rounded-2xl border border-white/10 bg-neutral-950 overflow-hidden shadow-lg hover:border-white/25 hover:shadow-2xl transition-all duration-300">
+      {/* Slim Metadata Header Bar */}
+      <div className="h-10 bg-black/90 border-b border-white/8 px-3.5 flex items-center justify-between text-xs text-white shrink-0 gap-2">
+        <span className="text-[10px] font-mono text-neutral-400 tracking-wider uppercase shrink-0">
+          {dateText}
+        </span>
+
+        <Link
+          href={`/watch/${video.id}`}
+          className="font-bold text-xs tracking-wide text-white truncate text-center flex-1 hover:text-neutral-200 transition-colors"
+          title={video.title}
+        >
+          {video.title}
+        </Link>
+
+        <div className="flex items-center gap-1.5 shrink-0 max-w-[140px] sm:max-w-xs justify-end">
+          {video.channel?.profilePictureUrl ? (
+            <img
+              src={video.channel.profilePictureUrl}
+              alt={channelName}
+              className="w-4.5 h-4.5 rounded-full object-cover border border-white/10 shrink-0"
+            />
+          ) : (
+            <div className="w-4.5 h-4.5 rounded-full bg-neutral-800 text-white flex items-center justify-center text-[9px] font-bold uppercase shrink-0">
+              {channelName[0] || <UserIcon className="w-2.5 h-2.5" />}
+            </div>
+          )}
+          <span className="text-[11px] text-neutral-300 font-medium truncate">
+            {channelName}
+          </span>
+        </div>
+      </div>
+
+      {/* Cinematic Preview */}
       <Link
         href={`/watch/${video.id}`}
-        className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/60 border border-border/40 group-hover:border-border transition-all"
+        className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block"
       >
         {video.thumbnailUrl ? (
           <img
             src={video.thumbnailUrl}
             alt={video.title}
-            className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+            className="w-full h-full object-cover group-hover/media:scale-105 transition-transform duration-500 ease-out"
             onError={(e) => {
-              // Graceful fallback if URL breaks
               e.currentTarget.style.display = "none";
-              if (e.currentTarget.parentElement) {
-                e.currentTarget.parentElement.classList.add("fallback-bg");
-              }
             }}
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-card to-muted text-muted-foreground">
-            <Play className="w-8 h-8 opacity-40 group-hover:opacity-80 group-hover:scale-110 transition-all text-foreground" />
-            <span className="text-[11px] font-medium mt-1 tracking-wide uppercase opacity-60">
-              Vion Stream
+          <div className="w-full h-full flex flex-col items-center justify-center bg-radial from-neutral-900 to-black text-neutral-500">
+            <Play className="w-8 h-8 opacity-40 group-hover/media:opacity-80 transition-opacity" />
+            <span className="text-[10px] font-mono tracking-widest uppercase mt-1 opacity-60">
+              Live Wallpaper
             </span>
           </div>
         )}
 
-        {/* Resolution Badge */}
-        {topResolution && (
-          <div className="absolute top-2 right-2">
-            <Badge variant="secondary" className="text-[10px] py-0 px-1.5 backdrop-blur-md bg-black/60 text-white border-0 font-bold">
-              {topResolution}
-            </Badge>
-          </div>
-        )}
+        {/* Subtle Vignette Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 pointer-events-none" />
 
-        {/* View Count Badge on Thumbnail */}
-        <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-xs text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
-          {formatViews(video.viewCount)}
+        {/* Play Glyph on Hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/media:opacity-100 transition-opacity duration-300">
+          <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-xl scale-90 group-hover/media:scale-100 transition-transform">
+            <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+          </div>
+        </div>
+
+        {/* Bottom Badges */}
+        <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+          <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-xs text-[9px] font-mono font-bold text-white border border-white/10">
+            {topResolution}
+          </span>
+          <span className="px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-xs text-[9px] font-mono text-neutral-300">
+            {formatViews(video.viewCount)}
+          </span>
         </div>
       </Link>
-
-      {/* Video Details */}
-      <div className="flex gap-3 px-0.5">
-        {/* Channel Profile Picture */}
-        <div className="shrink-0 mt-0.5">
-          {video.channel?.id ? (
-            <Link href={`/channel/${video.channel.id}`} className="block">
-              {video.channel?.profilePictureUrl ? (
-                <img
-                  src={video.channel.profilePictureUrl}
-                  alt={video.channel.channelName || "Channel"}
-                  className="w-8 h-8 rounded-full object-cover border border-border/60 hover:opacity-90 transition-opacity"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-muted-foreground uppercase hover:opacity-90 transition-opacity">
-                  {video.channel?.channelName?.[0] || <UserIcon className="w-4 h-4" />}
-                </div>
-              )}
-            </Link>
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-xs font-bold text-muted-foreground uppercase">
-              <UserIcon className="w-4 h-4" />
-            </div>
-          )}
-        </div>
-
-        {/* Title, Channel Name, and Meta */}
-        <div className="flex-1 min-w-0">
-          <Link href={`/watch/${video.id}`}>
-            <h3 className="font-semibold text-sm line-clamp-2 leading-snug text-foreground group-hover:text-primary transition-colors">
-              {video.title}
-            </h3>
-          </Link>
-
-          {video.channel && (
-            <Link
-              href={`/channel/${video.channel.id}`}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1 truncate block"
-            >
-              {video.channel.channelName}
-              {video.channel.handle && (
-                <span className="text-[11px] opacity-75 ml-1">
-                  @{video.channel.handle}
-                </span>
-              )}
-            </Link>
-          )}
-
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5">
-            <span>{formatViews(video.viewCount)}</span>
-            <span>•</span>
-            <span suppressHydrationWarning>{formatTimeAgo(video.createdAt)}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

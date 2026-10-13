@@ -99,7 +99,17 @@ async function signInUser(input: SignInUser) {
     },
   );
 
-  return token;
+  const safeUser = {
+    id: userExists.id,
+    email: userExists.email,
+    gender: userExists.gender,
+    firstName: userExists.firstName,
+    lastName: userExists.lastName,
+    dob: dob,
+    createdAt: userExists.createdAt.toString(),
+  };
+
+  return { token, user: safeUser };
 }
 
 const googleClient = new OAuth2Client();

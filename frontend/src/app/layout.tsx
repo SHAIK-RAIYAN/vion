@@ -8,6 +8,12 @@ import { AuthProvider } from "@/context/AuthContext";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { CommandPalette } from "@/components/navigation/CommandPalette";
 import { Toaster } from "sonner";
+import {
+  CurtainTransitionProvider,
+  CurtainTransitionOverlay,
+  Preloader,
+} from "@/components/transitions";
+import { ViewModeProvider } from "@/context/ViewModeContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -54,14 +60,20 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <LenisProvider>
-            <FontProvider>
-              <AuthProvider>
-                {children}
-                <AuthModal />
-                <CommandPalette />
-                <Toaster position="bottom-right" richColors theme="system" />
-              </AuthProvider>
-            </FontProvider>
+            <CurtainTransitionProvider>
+              <FontProvider>
+                <AuthProvider>
+                  <ViewModeProvider>
+                    <CurtainTransitionOverlay />
+                    <Preloader />
+                    {children}
+                    <AuthModal />
+                    <CommandPalette />
+                    <Toaster position="bottom-right" richColors theme="system" />
+                  </ViewModeProvider>
+                </AuthProvider>
+              </FontProvider>
+            </CurtainTransitionProvider>
           </LenisProvider>
         </ThemeProvider>
       </body>

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useViewMode } from "@/context/ViewModeContext";
 import { useTheme } from "next-themes";
 import { useFont, type FontChoice } from "@/components/theme/FontProvider";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,6 @@ import {
   Sun,
   Moon,
   Laptop,
-  Menu,
   User as UserIcon,
   LogOut,
   Settings,
@@ -37,6 +37,9 @@ import {
   ExternalLink,
   Upload,
   History,
+  Layers,
+  LayoutGrid,
+  Compass,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -46,17 +49,35 @@ interface HeaderProps {
 }
 
 export function Header({
-  onToggleSidebar,
   searchQuery = "",
   onSearchChange,
 }: HeaderProps) {
   const router = useRouter();
-  const { user, openAuthModal, signout } = useAuth();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user, isLoading, openAuthModal, signout } = useAuth();
+  const { viewMode, setViewMode } = useViewMode();
   const { theme, setTheme } = useTheme();
   const { font, setFont } = useFont();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+
+  // Sync incoming search query
+  useEffect(() => {
+    setLocalSearch(searchQuery);
+  }, [searchQuery]);
+
+  // Determine active feed or navigation item
+  const currentFeedParam = searchParams.get("feed");
+  const isSubscriptionsActive =
+    currentFeedParam === "subscriptions" || pathname === "/subscriptions";
+  const isHistoryActive = pathname === "/history";
+  const isDiscoverActive =
+    (pathname === "/" || pathname === "") &&
+    !isSubscriptionsActive &&
+    !isHistoryActive;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +91,20 @@ export function Header({
     window.dispatchEvent(new CustomEvent("open-command-palette"));
   };
 
+  const handleSubscriptionsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) {
+      openAuthModal("signin");
+      return;
+    }
+    router.push("/?feed=subscriptions");
+  };
+
+  const handleDiscoverClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push("/");
+  };
+
   const fontOptions: { id: FontChoice; label: string }[] = [
     { id: "system", label: "System Default" },
     { id: "inter", label: "Inter" },
@@ -79,96 +114,192 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full h-14 border-b border-border bg-background/80 backdrop-blur-md px-4 flex items-center justify-between gap-4 select-none">
-        {/* Left: Sidebar Toggle & Brand */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onToggleSidebar}
-            aria-label="Toggle navigation menu"
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors md:hidden cursor-pointer"
+      <header className="sticky top-0 z-50 w-full h-14 bg-black/85 backdrop-blur-xl px-4 md:px-7 flex items-center justify-between gap-4 select-none transition-colors">
+        {/* =========================================================================
+            LEFT AREA: Custom VION Wordmark
+            ========================================================================= */}
+        <div className="flex items-center shrink-0">
+          <Link
+            href="/"
+            onClick={handleDiscoverClick}
+            className="group flex items-center gap-2 cursor-pointer focus:outline-hidden"
+            aria-label="Vion Home"
           >
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <Link href="/" className="flex items-center gap-2 group cursor-pointer">
-            <div className="w-7 h-7 rounded-lg bg-[var(--brand)] flex items-center justify-center text-white font-black text-sm tracking-tighter shadow-xs group-hover:scale-105 transition-transform">
-              V
-            </div>
-            <span className="font-bold text-lg tracking-tight text-foreground">
-              Vion
+            <span className="font-black text-sm tracking-[0.32em] text-white uppercase group-hover:text-white transition-all pl-0.5">
+              VION
             </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff3c00] group-hover:scale-125 transition-transform shadow-[0_0_8px_#ff3c00]" />
           </Link>
         </div>
 
-        {/* Middle: Interactive Search Bar */}
-        <form
-          onSubmit={handleSearchSubmit}
-          className="flex-1 max-w-xl mx-2"
-        >
-          <div className="relative flex items-center w-full group">
-            <Search className="w-4 h-4 absolute left-3 text-muted-foreground group-hover:text-foreground transition-colors pointer-events-none" />
-            <input
-              type="text"
-              value={localSearch}
-              onChange={(e) => {
-                setLocalSearch(e.target.value);
-                onSearchChange?.(e.target.value);
-              }}
-              placeholder="Search videos, channels... (or press Ctrl+K)"
-              className="w-full h-9 pl-9 pr-14 rounded-full border border-border bg-card/60 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring focus:border-ring transition-all group-hover:bg-card/90"
-            />
+        {/* =========================================================================
+            CENTER AREA: Search Bar + Subscriptions + History Navigation
+            ========================================================================= */}
+        <div className="flex-1 max-w-2xl mx-auto flex items-center justify-center gap-2 sm:gap-4 min-w-0">
+          {/* Minimal Search Capsule */}
+          <form
+            onSubmit={handleSearchSubmit}
+            className={`transition-all duration-300 ${
+              searchExpanded ? "flex-1 max-w-md" : "w-36 sm:w-56 md:w-64"
+            }`}
+          >
+            <div className="relative flex items-center w-full group">
+              <Search className="w-3.5 h-3.5 absolute left-3 text-neutral-400 group-hover:text-white transition-colors pointer-events-none" />
+              <input
+                type="text"
+                value={localSearch}
+                onFocus={() => setSearchExpanded(true)}
+                onBlur={() => setSearchExpanded(false)}
+                onChange={(e) => {
+                  setLocalSearch(e.target.value);
+                  onSearchChange?.(e.target.value);
+                }}
+                placeholder="Search wallpapers... (Ctrl+K)"
+                className="w-full h-8 pl-8 pr-12 rounded-full border border-white/8 bg-neutral-900/60 text-xs text-white placeholder:text-neutral-500 focus:outline-hidden focus:border-white/20 focus:bg-neutral-900/90 transition-all"
+              />
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                title="Open Command Palette (Ctrl+K)"
+                className="hidden md:inline-flex items-center text-[9px] font-mono text-neutral-400 bg-white/5 border border-white/10 px-1 py-0.5 rounded absolute right-2.5 hover:text-white cursor-pointer transition-colors"
+              >
+                ⌘K
+              </button>
+            </div>
+          </form>
+
+          {/* Primary Feed Navigation Buttons */}
+          <nav
+            aria-label="Feed Navigation"
+            className="flex items-center gap-1 sm:gap-1.5 shrink-0"
+          >
+            {/* Discover / All Wallpapers Feed */}
             <button
               type="button"
-              onClick={openCommandPalette}
-              title="Open Command Palette (Ctrl+K)"
-              className="hidden sm:inline-flex items-center text-[10px] font-mono text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded-sm absolute right-3 hover:text-foreground cursor-pointer transition-colors"
+              onClick={handleDiscoverClick}
+              className={`relative px-2.5 sm:px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                isDiscoverActive
+                  ? "text-white font-medium bg-white/8"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/4"
+              }`}
             >
-              Ctrl+K
+              <Compass className="w-3.5 h-3.5 opacity-70" />
+              <span className="hidden sm:inline">Discover</span>
+            </button>
+
+            {/* Subscriptions Feed (Functional Control with Signature Red-Orange Accent) */}
+            <button
+              type="button"
+              onClick={handleSubscriptionsClick}
+              className={`relative px-2.5 sm:px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                isSubscriptionsActive
+                  ? "text-[#ff3c00] font-semibold bg-[#ff3c00]/10 shadow-[0_0_12px_rgba(255,60,0,0.2)]"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/4"
+              }`}
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span>Subscriptions</span>
+              {isSubscriptionsActive && (
+                <span className="w-1 h-1 rounded-full bg-[#ff3c00]" />
+              )}
+            </button>
+
+            {/* Watch History */}
+            <Link
+              href="/history"
+              className={`relative px-2.5 sm:px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                isHistoryActive
+                  ? "text-white font-medium bg-white/8"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/4"
+              }`}
+            >
+              <History className="w-3.5 h-3.5 opacity-70" />
+              <span className="hidden md:inline">History</span>
+            </Link>
+          </nav>
+        </div>
+
+        {/* =========================================================================
+            RIGHT AREA: View Mode Toggle + Upload + Settings + Account
+            ========================================================================= */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Dedicated View-Mode Toggle (Stacked vs Grid) */}
+          <div
+            role="group"
+            aria-label="Wallpaper view mode"
+            className="flex items-center p-0.5 rounded-full bg-neutral-900/80 border border-white/8 shadow-inner"
+          >
+            <button
+              type="button"
+              onClick={() => setViewMode("stacked")}
+              title="Cinematic Stacked View (Default)"
+              aria-pressed={viewMode === "stacked"}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all cursor-pointer ${
+                viewMode === "stacked"
+                  ? "bg-white text-black font-semibold shadow-xs"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span className="hidden lg:inline">Stack</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("grid")}
+              title="Responsive Gallery Grid"
+              aria-pressed={viewMode === "grid"}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all cursor-pointer ${
+                viewMode === "grid"
+                  ? "bg-white text-black font-semibold shadow-xs"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              <LayoutGrid className="w-3 h-3" />
+              <span className="hidden lg:inline">Grid</span>
             </button>
           </div>
-        </form>
 
-        {/* Right: Upload, Settings Popover & Account Dropdown */}
-        <div className="flex items-center gap-2">
           {/* Creator Upload Action (Authenticated) */}
           {user ? (
             <Button
               size="sm"
               variant="outline"
               onClick={() => setIsUploadOpen(true)}
-              className="rounded-full text-xs font-semibold gap-1.5 px-3 h-8 border-border hover:border-[var(--brand)]/50"
+              className="rounded-full text-xs font-semibold gap-1.5 px-3 h-7.5 border-white/10 bg-transparent text-white hover:bg-white/5 hover:border-[#ff3c00]/50"
             >
-              <Upload className="w-3.5 h-3.5 text-[var(--brand)]" />
+              <Upload className="w-3 h-3 text-[#ff3c00]" />
               <span className="hidden sm:inline">Upload</span>
             </Button>
           ) : null}
 
-          {/* Settings & Appearance Popover (shadcn Popover) */}
+          {/* Interface Appearance & Settings Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Interface settings & appearance"
-                className="rounded-full text-muted-foreground hover:text-foreground h-8 w-8 cursor-pointer"
+              <button
+                type="button"
+                aria-label="Interface appearance"
+                className="rounded-full text-neutral-400 hover:text-white hover:bg-white/5 h-8 w-8 flex items-center justify-center cursor-pointer transition-colors"
               >
-                <Settings className="w-4 h-4" />
-              </Button>
+                <Settings className="w-3.5 h-3.5" />
+              </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-4 text-foreground rounded-2xl shadow-xl">
-              <div className="flex items-center gap-2 pb-3 border-b border-border mb-3">
-                <Palette className="w-4 h-4 text-[var(--brand)]" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <PopoverContent
+              align="end"
+              className="w-72 p-4 text-foreground bg-neutral-950 border border-white/10 rounded-2xl shadow-2xl"
+            >
+              <div className="flex items-center gap-2 pb-3 border-b border-white/10 mb-3">
+                <Palette className="w-4 h-4 text-[#ff3c00]" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
                   Interface Appearance
                 </h3>
               </div>
 
               {/* Theme Mode Selector */}
               <div className="space-y-1.5 mb-4">
-                <label className="text-[11px] font-semibold text-muted-foreground block">
+                <label className="text-[11px] font-semibold text-neutral-400 block">
                   Theme Mode
                 </label>
-                <div className="relative flex p-1 bg-muted rounded-xl">
+                <div className="relative flex p-1 bg-neutral-900 rounded-xl">
                   {[
                     { id: "light", label: "Light", icon: Sun },
                     { id: "dark", label: "Dark", icon: Moon },
@@ -183,8 +314,8 @@ export function Header({
                         onClick={() => setTheme(item.id)}
                         className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-card text-foreground shadow-xs"
-                            : "text-muted-foreground hover:text-foreground"
+                            ? "bg-black text-white shadow-xs"
+                            : "text-neutral-400 hover:text-white"
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5" />
@@ -197,7 +328,7 @@ export function Header({
 
               {/* Font Typeface Selector */}
               <div className="space-y-1.5 mb-4">
-                <label className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                <label className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1">
                   <Type className="w-3.5 h-3.5" />
                   <span>Typeface</span>
                 </label>
@@ -211,13 +342,13 @@ export function Header({
                         onClick={() => setFont(opt.id)}
                         className={`relative w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-secondary text-foreground font-semibold shadow-2xs"
-                            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            ? "bg-neutral-800 text-white font-semibold"
+                            : "text-neutral-400 hover:bg-neutral-900 hover:text-white"
                         }`}
                       >
                         <span className="relative z-10">{opt.label}</span>
                         {isSelected && (
-                          <Check className="w-3.5 h-3.5 text-[var(--brand)] relative z-10 shrink-0" />
+                          <Check className="w-3.5 h-3.5 text-[#ff3c00] relative z-10 shrink-0" />
                         )}
                       </button>
                     );
@@ -226,10 +357,10 @@ export function Header({
               </div>
 
               {/* Account Settings Link */}
-              <div className="pt-2 border-t border-border">
+              <div className="pt-2 border-t border-white/10">
                 <Link
                   href="/settings"
-                  className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer group"
+                  className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:bg-neutral-900 hover:text-white transition-colors cursor-pointer group"
                 >
                   <span>More account settings</span>
                   <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -238,51 +369,62 @@ export function Header({
             </PopoverContent>
           </Popover>
 
-          {/* User Account Dropdown (shadcn DropdownMenu) */}
-          {user ? (
+          {/* User Account / Sign In */}
+          {isLoading ? (
+            <div
+              aria-label="Checking account status"
+              className="flex items-center gap-2 h-8 px-3 rounded-full border border-white/10 bg-neutral-900/50 animate-pulse select-none"
+            >
+              <div className="w-4 h-4 rounded-full bg-neutral-700 shrink-0" />
+              <div className="w-10 h-2.5 rounded bg-neutral-800 hidden sm:block" />
+            </div>
+          ) : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
                   aria-label="User profile menu"
-                  className="flex items-center gap-2 p-1 pl-2 rounded-full border border-border hover:bg-muted transition-colors cursor-pointer outline-hidden"
+                  className="flex items-center gap-2 p-0.5 pl-2 rounded-full border border-white/10 hover:border-white/20 hover:bg-neutral-900 transition-colors cursor-pointer outline-hidden"
                 >
-                  <span className="text-xs font-semibold max-w-[100px] truncate hidden sm:inline">
+                  <span className="text-xs font-medium max-w-[90px] truncate hidden sm:inline text-neutral-300">
                     {user.firstName}
                   </span>
-                  <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs uppercase">
+                  <div className="w-7 h-7 rounded-full bg-white text-black flex items-center justify-center font-bold text-[11px] uppercase shadow-sm">
                     {user.firstName[0]}
                     {user.lastName[0]}
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5 shadow-xl">
+              <DropdownMenuContent
+                align="end"
+                className="w-56 rounded-2xl p-1.5 shadow-2xl bg-neutral-950 border border-white/10 text-white"
+              >
                 <DropdownMenuLabel className="px-2 py-1.5 font-normal">
-                  <p className="font-semibold text-xs text-foreground truncate">
+                  <p className="font-semibold text-xs text-white truncate">
                     {user.firstName} {user.lastName}
                   </p>
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-[11px] text-neutral-400 truncate">
                     {user.email}
                   </p>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="bg-white/10" />
 
                 <DropdownMenuItem asChild>
                   <Link
-                    href="/subscriptions"
-                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer"
+                    href="/?feed=subscriptions"
+                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
-                    <Tv className="w-4 h-4 text-muted-foreground" />
-                    <span>My Subscriptions</span>
+                    <Tv className="w-4 h-4 text-neutral-400" />
+                    <span>Subscriptions Stream</span>
                   </Link>
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild>
                   <Link
                     href="/history"
-                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer"
+                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
-                    <History className="w-4 h-4 text-muted-foreground" />
+                    <History className="w-4 h-4 text-neutral-400" />
                     <span>Watch History</span>
                   </Link>
                 </DropdownMenuItem>
@@ -290,18 +432,18 @@ export function Header({
                 <DropdownMenuItem asChild>
                   <Link
                     href="/settings"
-                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer"
+                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
-                    <Settings className="w-4 h-4 text-muted-foreground" />
+                    <Settings className="w-4 h-4 text-neutral-400" />
                     <span>Account Settings</span>
                   </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="bg-white/10" />
 
                 <DropdownMenuItem
                   onClick={() => signout()}
-                  className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                  className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sign Out</span>
@@ -313,9 +455,9 @@ export function Header({
               size="sm"
               variant="default"
               onClick={() => openAuthModal("signin")}
-              className="rounded-full text-xs font-semibold px-4 cursor-pointer active:scale-95 transition-transform h-8"
+              className="rounded-full text-xs font-semibold px-4 cursor-pointer active:scale-95 transition-transform h-7.5 bg-white text-black hover:bg-neutral-200"
             >
-              <UserIcon className="w-3.5 h-3.5 mr-1.5" />
+              <UserIcon className="w-3.5 h-3.5 mr-1" />
               Sign In
             </Button>
           )}

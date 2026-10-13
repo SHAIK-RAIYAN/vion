@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
 import { cn } from "@/lib/utils";
 import { History, Home, Tv } from "lucide-react";
-import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -117,10 +117,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             }
 
             return (
-              <Link
+              <CurtainLink
                 key={item.href}
                 href={item.href}
-                ref={(el) => {
+                prefetch={false}
+                ref={(el: HTMLAnchorElement | null) => {
                   if (el) itemsRef.current.set(item.href, el);
                   else itemsRef.current.delete(item.href);
                 }}
@@ -141,7 +142,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   )}
                 />
                 <span>{item.label}</span>
-              </Link>
+              </CurtainLink>
             );
           })}
         </div>

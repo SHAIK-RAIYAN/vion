@@ -5,10 +5,15 @@ import { api } from "../lib/api";
 import type { User } from "../types/api";
 import { toast } from "sonner";
 
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
 interface AuthContextType {
   user: User | null;
+  status: AuthStatus;
   isLoading: boolean;
-  refreshUser: () => Promise<void>;
+  isAuthenticated: boolean;
+  refreshUser: () => Promise<User | null>;
+  setSessionUser: (user: User | null) => void;
   signout: () => Promise<void>;
   isAuthModalOpen: boolean;
   authModalTab: "signin" | "signup";
@@ -18,8 +23,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  status: "loading",
   isLoading: true,
-  refreshUser: async () => {},
+  isAuthenticated: false,
+  refreshUser: async () => null,
+  setSessionUser: () => {},
   signout: async () => {},
   isAuthModalOpen: false,
   authModalTab: "signin",
@@ -29,22 +37,32 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<AuthStatus>("loading");
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<"signin" | "signup">("signin");
 
-  const refreshUser = useCallback(async () => {
+  // Synchronously set verified user (e.g. from signin/signup response)
+  const setSessionUser = useCallback((newUser: User | null) => {
+    setUser(newUser);
+    setStatus(newUser ? "authenticated" : "unauthenticated");
+  }, []);
+
+  const refreshUser = useCallback(async (): Promise<User | null> => {
     try {
       const res = await api.auth.getMe();
-      if (res.data) {
+      if (res && res.data) {
         setUser(res.data);
+        setStatus("authenticated");
+        return res.data;
       } else {
         setUser(null);
+        setStatus("unauthenticated");
+        return null;
       }
     } catch {
       setUser(null);
-    } finally {
-      setIsLoading(false);
+      setStatus("unauthenticated");
+      return null;
     }
   }, []);
 
@@ -54,12 +72,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await api.auth.getMe();
         if (isMounted) {
-          setUser(res.data || null);
+          if (res && res.data) {
+            setUser(res.data);
+            setStatus("authenticated");
+          } else {
+            setUser(null);
+            setStatus("unauthenticated");
+          }
         }
       } catch {
-        if (isMounted) setUser(null);
-      } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
       }
     })();
 
@@ -72,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await api.auth.signout();
       setUser(null);
+      setStatus("unauthenticated");
       toast.success("Signed out successfully");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Signout failed";
@@ -92,8 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        isLoading,
+        status,
+        isLoading: status === "loading",
+        isAuthenticated: status === "authenticated",
         refreshUser,
+        setSessionUser,
         signout,
         isAuthModalOpen,
         authModalTab,

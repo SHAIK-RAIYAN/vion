@@ -14,7 +14,7 @@ const signUpUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 const signInUser = asyncHandler(async (req: Request, res: Response) => {
-  const token = await authservice.signInUser(req.body);
+  const { token, user } = await authservice.signInUser(req.body);
 
   res.cookie("token", token, {
     httpOnly: true,
@@ -23,11 +23,14 @@ const signInUser = asyncHandler(async (req: Request, res: Response) => {
     sameSite: NODE_ENV === "production" ? "none" : "lax",
   });
 
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+
   res.status(200).json({
     success: true,
     message: "SignIn Successful",
     token,
-    data: { token },
+    data: { token, user },
+    user,
   });
 });
 
@@ -66,6 +69,8 @@ const signOutUser = asyncHandler((req: Request, res: Response) => {
 });
 
 const getAuthMe = asyncHandler((req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.setHeader("Pragma", "no-cache");
   res.status(200).json({
     success: true,
     message: "Session authenticated",

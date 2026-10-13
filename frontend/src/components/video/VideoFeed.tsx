@@ -1,57 +1,91 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { useViewMode } from "@/context/ViewModeContext";
 import { api } from "@/lib/api";
 import type { Upload, PaginationMeta } from "@/types/api";
-import { VideoCard } from "./VideoCard";
-import { VideoCardSkeleton } from "./VideoCardSkeleton";
+import { StackedVideoCards } from "./StackedVideoCards";
+import { GalleryGrid } from "./GalleryGrid";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCw, Film, Search } from "lucide-react";
+import {
+  AlertCircle,
+  RefreshCw,
+  Search,
+  Tv,
+  Layers,
+  LayoutGrid,
+  Sparkles,
+  User,
+} from "lucide-react";
+import { useGSAP } from "@gsap/react";
+import { gsap, prefersReducedMotion } from "@/lib/gsap";
 
 interface VideoFeedProps {
   searchQuery?: string;
+  initialFeed?: "all" | "subscriptions";
 }
 
-export function VideoFeed({ searchQuery = "" }: VideoFeedProps) {
+export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, openAuthModal } = useAuth();
+  const { viewMode } = useViewMode();
+
+  // Active feed: query param takes precedence or prop
+  const activeFeed: "all" | "subscriptions" =
+    initialFeed ||
+    (searchParams.get("feed") === "subscriptions" ? "subscriptions" : "all");
+
   const [videos, setVideos] = useState<Upload[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchVideos = useCallback(async (page = 1, append = false) => {
-    if (page === 1) {
-      setLoading(true);
-      setError(null);
-    } else {
-      setLoadingMore(true);
-    }
+  const containerRef = useRef<HTMLDivElement>(null);
 
-    try {
-      const res = await api.feed.get(page, 20);
-      if (append) {
-
-        setVideos((prev) => [...prev, ...res.items]);
+  const fetchVideos = useCallback(
+    async (page = 1, append = false, bypassCache = false) => {
+      if (page === 1) {
+        setLoading(true);
+        setError(null);
       } else {
-        setVideos(res.items);
+        setLoadingMore(true);
       }
-      setPagination(res.pagination);
-    } catch (err: any) {
-      setError(
-        err.message ||
-          "Could not load videos from backend. Ensure the backend server is running.",
-      );
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }, []);
 
+      try {
+        const res = await api.feed.get(page, 20, {
+          feed: activeFeed,
+          bypassCache,
+        });
+
+        if (append) {
+          setVideos((prev) => [...prev, ...res.items]);
+        } else {
+          setVideos(res.items);
+        }
+        setPagination(res.pagination);
+      } catch (err: any) {
+        setError(
+          err.message ||
+            "Could not load wallpapers. Ensure the backend server is running.",
+        );
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [activeFeed],
+  );
+
+  // Fetch whenever active feed changes
   useEffect(() => {
     fetchVideos(1);
   }, [fetchVideos]);
 
-  // Client-side search filtering of fetched uploads
+  // Client-side search filtering
   const filteredVideos = useMemo(() => {
     if (!searchQuery.trim()) return videos;
     const query = searchQuery.toLowerCase().trim();
@@ -59,40 +93,109 @@ export function VideoFeed({ searchQuery = "" }: VideoFeedProps) {
       (v) =>
         v.title.toLowerCase().includes(query) ||
         v.description?.toLowerCase().includes(query) ||
-        v.channel?.channelName.toLowerCase().includes(query) ||
-        v.channel?.handle.toLowerCase().includes(query),
+        v.channel?.channelName?.toLowerCase().includes(query) ||
+        v.channel?.handle?.toLowerCase().includes(query),
     );
   }, [videos, searchQuery]);
 
-  // 1. Initial Loading State
-  if (loading) {
+  // View mode transition animation
+  useGSAP(
+    () => {
+      if (!containerRef.current || prefersReducedMotion()) return;
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0.7, scale: 0.99 },
+        {
+          opacity: 1,
+          scale: 1,
+          duration: 0.35,
+          ease: "power2.out",
+          clearProps: "transform",
+        },
+      );
+    },
+    {
+      dependencies: [viewMode],
+      scope: containerRef,
+    },
+  );
+
+  // 1. Unauthenticated Subscriptions Feed State
+  if (activeFeed === "subscriptions" && !user) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-6">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <VideoCardSkeleton key={i} />
-        ))}
+      <div className="flex flex-col items-center justify-center min-h-[500px] text-center p-8 max-w-md mx-auto my-12 border border-white/10 bg-neutral-950 rounded-3xl shadow-2xl">
+        <div className="w-14 h-14 rounded-full bg-[#ff3c00]/10 text-[#ff3c00] flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,60,0,0.15)]">
+          <Tv className="w-7 h-7" />
+        </div>
+        <h3 className="text-xl font-bold tracking-tight text-white mb-2">
+          Your Subscribed Creators
+        </h3>
+        <p className="text-xs text-neutral-400 leading-relaxed mb-6">
+          Sign in to access live wallpapers and exclusive video previews from creators you follow.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 w-full">
+          <Button
+            size="sm"
+            onClick={() => openAuthModal("signin")}
+            className="flex-1 rounded-full text-xs font-semibold h-9 bg-white text-black hover:bg-neutral-200"
+          >
+            <User className="w-3.5 h-3.5 mr-1.5" />
+            Sign In to Vion
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => router.push("/")}
+            className="flex-1 rounded-full text-xs font-semibold h-9 border-white/10 text-neutral-300 hover:text-white hover:bg-white/5"
+          >
+            Discover All
+          </Button>
+        </div>
       </div>
     );
   }
 
-  // 2. Network / Backend Error State
+  // 2. Loading State: Minimalist Cinematic Skeleton
+  if (loading) {
+    return (
+      <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
+        <div className="relative w-full max-w-5xl aspect-[16/9.5] max-h-[65vh] rounded-3xl border border-white/8 bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center animate-pulse">
+          <div className="w-full h-12 bg-black/60 border-b border-white/5 px-6 flex items-center justify-between">
+            <div className="w-24 h-3 rounded bg-white/10" />
+            <div className="w-48 h-3 rounded bg-white/10" />
+            <div className="w-20 h-3 rounded bg-white/10" />
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+              <Sparkles className="w-5 h-5 text-neutral-600 animate-spin" />
+            </div>
+            <p className="text-xs font-mono tracking-widest uppercase text-neutral-500">
+              Curating Wallpapers...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Error State
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[360px] p-6 text-center border border-border/80 bg-card/40 rounded-2xl max-w-lg mx-auto my-8">
-        <div className="w-12 h-12 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mb-3">
+      <div className="flex flex-col items-center justify-center min-h-[380px] p-8 text-center border border-white/10 bg-neutral-950 rounded-3xl max-w-lg mx-auto my-12 shadow-2xl">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mb-4">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h3 className="text-base font-semibold text-foreground mb-1">
-          Backend Connection Issue
+        <h3 className="text-base font-bold text-white mb-1">
+          Feed Unavailable
         </h3>
-        <p className="text-xs text-muted-foreground mb-4 max-w-sm">
+        <p className="text-xs text-neutral-400 mb-6 max-w-sm leading-relaxed">
           {error}
         </p>
         <Button
           size="sm"
           variant="outline"
-          onClick={() => fetchVideos(1)}
-          className="gap-2 text-xs"
+          onClick={() => fetchVideos(1, false, true)}
+          className="rounded-full text-xs font-semibold px-5 h-8.5 border-white/10 text-white hover:bg-white/5 gap-2"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Retry Connection
@@ -101,70 +204,96 @@ export function VideoFeed({ searchQuery = "" }: VideoFeedProps) {
     );
   }
 
-  // 3. Search Active - Filter Stats
+  // 4. Empty State
+  if (filteredVideos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[420px] p-8 text-center border border-dashed border-white/10 bg-neutral-950/40 rounded-3xl max-w-md mx-auto my-12">
+        <div className="w-14 h-14 rounded-full bg-white/5 text-neutral-400 flex items-center justify-center mb-4">
+          {activeFeed === "subscriptions" ? (
+            <Tv className="w-7 h-7 text-[#ff3c00]" />
+          ) : (
+            <Search className="w-7 h-7" />
+          )}
+        </div>
+
+        <h3 className="text-lg font-bold text-white mb-1.5">
+          {searchQuery.trim()
+            ? "No Matching Wallpapers"
+            : activeFeed === "subscriptions"
+            ? "No Subscriptions Yet"
+            : "No Wallpapers Published"}
+        </h3>
+
+        <p className="text-xs text-neutral-400 max-w-xs mb-6 leading-relaxed">
+          {searchQuery.trim()
+            ? `No wallpapers found matching "${searchQuery}". Try a different keyword.`
+            : activeFeed === "subscriptions"
+            ? "You haven't followed any creators yet. Explore the discover gallery to find inspiring creators."
+            : "Independent wallpapers will appear here once published."}
+        </p>
+
+        {activeFeed === "subscriptions" ? (
+          <Button
+            size="sm"
+            onClick={() => router.push("/")}
+            className="rounded-full text-xs font-semibold px-5 h-9 bg-white text-black hover:bg-neutral-200"
+          >
+            Explore Discover Gallery
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => fetchVideos(1, false, true)}
+            className="rounded-full text-xs font-semibold px-5 h-9 border-white/10 text-white hover:bg-white/5 gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh Gallery
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <div ref={containerRef} className="w-full">
+      {/* Search Filter Header pill if search active */}
       {searchQuery.trim() && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 px-3 py-2 rounded-lg border border-border/60">
-          <Search className="w-3.5 h-3.5" />
-          <span>
-            Filtering results for:{" "}
-            <strong className="text-foreground font-semibold">
-              &quot;{searchQuery}&quot;
-            </strong>{" "}
-            ({filteredVideos.length} found)
+        <div className="flex items-center justify-between mb-4 px-4 py-2 rounded-xl bg-neutral-900/60 border border-white/8 text-xs text-neutral-300">
+          <div className="flex items-center gap-2">
+            <Search className="w-3.5 h-3.5 text-[#ff3c00]" />
+            <span>
+              Searching for:{" "}
+              <strong className="text-white font-semibold">
+                &quot;{searchQuery}&quot;
+              </strong>
+            </span>
+          </div>
+          <span className="font-mono text-[11px] text-neutral-400">
+            {filteredVideos.length} result{filteredVideos.length === 1 ? "" : "s"}
           </span>
         </div>
       )}
 
-      {/* 4. Empty State (No videos exist in DB or zero search matches) */}
-      {filteredVideos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[320px] p-8 text-center border border-dashed border-border rounded-2xl max-w-md mx-auto my-8">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3 text-muted-foreground">
-            <Film className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-semibold text-foreground mb-1">
-            {searchQuery.trim() ? "No matching videos" : "No videos uploaded yet"}
-          </h3>
-          <p className="text-xs text-muted-foreground max-w-xs mb-4">
-            {searchQuery.trim()
-              ? "Try searching for a different keyword or check your spelling."
-              : "Videos published to Vion will appear here on your feed."}
-          </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => fetchVideos(1)}
-            className="text-xs gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Refresh Feed
-          </Button>
-        </div>
+      {/* Render Selected View Mode */}
+      {viewMode === "stacked" ? (
+        <StackedVideoCards
+          videos={filteredVideos}
+          activeFeed={activeFeed}
+          hasNextPage={pagination?.hasNextPage}
+          onLoadMore={() =>
+            pagination?.page && fetchVideos(pagination.page + 1, true)
+          }
+        />
       ) : (
-        /* 5. Real Videos Grid */
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-6">
-            {filteredVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
-          </div>
-
-          {/* Load More Button */}
-          {pagination && pagination.hasNextPage && !searchQuery.trim() && (
-            <div className="flex justify-center pt-6 pb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loadingMore}
-                onClick={() => fetchVideos(pagination.page + 1, true)}
-                className="text-xs font-semibold px-6"
-              >
-                {loadingMore ? "Loading..." : "Load More Videos"}
-              </Button>
-            </div>
-          )}
-        </>
+        <GalleryGrid
+          videos={filteredVideos}
+          hasNextPage={pagination?.hasNextPage}
+          loadingMore={loadingMore}
+          onLoadMore={() =>
+            pagination?.page && fetchVideos(pagination.page + 1, true)
+          }
+        />
       )}
     </div>
   );

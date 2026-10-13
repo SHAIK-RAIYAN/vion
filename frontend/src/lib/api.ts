@@ -10,31 +10,119 @@ import { axiosClient, ApiError, API_BASE_URL } from "./axios";
 export { axiosClient, ApiError, API_BASE_URL };
 export * from "@/services";
 
+// In-flight GET request deduplication map to prevent redundant parallel requests
+const inFlightRequests = new Map<string, Promise<any>>();
+
+// In-memory cache for fast UI delivery with TTL (time-to-live)
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  ttl: number;
+}
+const apiMemoryCache = new Map<string, CacheEntry<any>>();
+
+/**
+ * Endpoint-specific TTL policies (in milliseconds)
+ * Feed and public search results are cached briefly for immediate rendering.
+ * Auth/user-sensitive requests have TTL = 0 (always fresh, but in-flight deduplicated).
+ */
+function getEndpointTTL(url: string): number {
+  if (url.startsWith("/feed")) return 20_000; // 20s for public feed
+  if (url.startsWith("/search")) return 15_000; // 15s for search
+  if (url.startsWith("/channels")) return 30_000; // 30s for channel profiles
+  return 0; // Default: deduplicate in-flight only, do not persist across time
+}
+
+/**
+ * Invalidate the in-memory cache (e.g. after upload, delete, or signout)
+ */
+export function clearApiCache(prefix?: string) {
+  if (!prefix) {
+    apiMemoryCache.clear();
+    return;
+  }
+  for (const key of apiMemoryCache.keys()) {
+    if (key.startsWith(prefix)) {
+      apiMemoryCache.delete(key);
+    }
+  }
+}
+
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {},
+  options: RequestInit & { bypassCache?: boolean } = {},
 ): Promise<T> {
   const method = (options.method || "GET").toUpperCase();
   const url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  let parsedBody: any = undefined;
-  if (options.body) {
-    try {
-      parsedBody =
-        typeof options.body === "string" ? JSON.parse(options.body) : options.body;
-    } catch {
-      parsedBody = options.body;
+  // Mutations clear relevant caches and are never deduplicated
+  if (method !== "GET") {
+    if (url.startsWith("/videos") || url.startsWith("/uploads") || url.startsWith("/feed")) {
+      clearApiCache("/feed");
+    }
+    if (url.startsWith("/auth/signout")) {
+      clearApiCache();
+    }
+
+    let parsedBody: any = undefined;
+    if (options.body) {
+      try {
+        parsedBody =
+          typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+      } catch {
+        parsedBody = options.body;
+      }
+    }
+
+    const res = await axiosClient.request<T>({
+      url,
+      method,
+      data: parsedBody,
+      headers: options.headers as Record<string, string>,
+    });
+    return res.data;
+  }
+
+  // 1. Check in-memory cache for valid cached response
+  const ttl = getEndpointTTL(url);
+  if (ttl > 0 && !options.bypassCache) {
+    const cached = apiMemoryCache.get(url);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      return cached.data as T;
     }
   }
 
-  const res = await axiosClient.request<T>({
-    url,
-    method,
-    data: parsedBody,
-    headers: options.headers as Record<string, string>,
-  });
+  // 2. In-flight request deduplication: return existing active Promise if identical request is in flight
+  if (inFlightRequests.has(url)) {
+    return inFlightRequests.get(url)!;
+  }
 
-  return res.data;
+  // 3. Dispatch single request and share promise
+  const executeRequest = (async () => {
+    try {
+      const res = await axiosClient.request<T>({
+        url,
+        method: "GET",
+        headers: options.headers as Record<string, string>,
+      });
+
+      // Save in cache if TTL > 0
+      if (ttl > 0) {
+        apiMemoryCache.set(url, {
+          data: res.data,
+          timestamp: Date.now(),
+          ttl,
+        });
+      }
+
+      return res.data;
+    } finally {
+      inFlightRequests.delete(url);
+    }
+  })();
+
+  inFlightRequests.set(url, executeRequest);
+  return executeRequest;
 }
 
 export const api = {
@@ -394,10 +482,15 @@ export const api = {
 
   // 7. FEED (/api/v1/feed)
   feed: {
-    get: async (page = 1, limit = 24) => {
+    get: async (
+      page = 1,
+      limit = 24,
+      options?: { feed?: "all" | "subscriptions"; bypassCache?: boolean },
+    ) => {
+      const feedParam = options?.feed ? `&feed=${options.feed}` : "";
       return request<PaginatedResponse<Upload>>(
-        `/feed?page=${page}&limit=${limit}`,
-        { method: "GET" },
+        `/feed?page=${page}&limit=${limit}${feedParam}`,
+        { method: "GET", bypassCache: options?.bypassCache },
       );
     },
   },
