@@ -5,6 +5,7 @@ import * as commentService from "./comment/comment.service";
 import * as watchHistoryService from "./watchHistory/watchHistory.service";
 import { updateProgressSchema, recordHistorySchema } from "./watchHistory/watchHistory.schema";
 import { AppError } from "../utils/AppError";
+import { normalizeOrigin, isOriginAllowed } from "../index";
 
 describe("Vion Integration Fixes Verification", () => {
   const testUserId = "user_fix_test_1111-1111-4111-8111-111111111111";
@@ -292,4 +293,35 @@ describe("Vion Integration Fixes Verification", () => {
       (db.orm.public.WatchHistory as any).where = origHistoryWhere;
     });
   });
+
+  describe("CORS Origin Resolution & Normalization", () => {
+    it("normalizeOrigin correctly strips trailing slashes, quotes, and whitespace", () => {
+      expect(normalizeOrigin("https://vion.raiyan.app/")).toBe("https://vion.raiyan.app");
+      expect(normalizeOrigin("  https://vion.raiyan.app///  ")).toBe("https://vion.raiyan.app");
+      expect(normalizeOrigin('"https://vion.raiyan.app"')).toBe("https://vion.raiyan.app");
+      expect(normalizeOrigin("HTTPS://VION.RAIYAN.APP/")).toBe("https://vion.raiyan.app");
+      expect(normalizeOrigin("")).toBe("");
+    });
+
+    it("isOriginAllowed allows production frontend origins with or without trailing slash", () => {
+      // Primary user domain
+      expect(isOriginAllowed("https://vion.raiyan.app")).toBe(true);
+      expect(isOriginAllowed("https://vion.raiyan.app/")).toBe(true);
+      expect(isOriginAllowed("https://www.vion.raiyan.app")).toBe(true);
+      expect(isOriginAllowed("https://preview.raiyan.app")).toBe(true);
+
+      // Local development
+      expect(isOriginAllowed("http://localhost:3000")).toBe(true);
+      expect(isOriginAllowed("http://127.0.0.1:3000")).toBe(true);
+
+      // Non-browser / server-to-server / curl
+      expect(isOriginAllowed(undefined)).toBe(true);
+
+      // Malicious or unrelated domains
+      expect(isOriginAllowed("https://malicious-attacker.com")).toBe(false);
+      expect(isOriginAllowed("https://not-raiyan.app")).toBe(false);
+      expect(isOriginAllowed("https://raiyan.app.evil.com")).toBe(false);
+    });
+  });
 });
+

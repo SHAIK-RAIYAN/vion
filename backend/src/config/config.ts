@@ -52,7 +52,14 @@ export const NODE_ENV = (env.NODE_ENV as "development" | "production" | "test") 
 export const DB_URL = env.DATABASE_URL || process.env.DATABASE_URL;
 export const SALT_ROUNDS = Number(env.SALT_ROUNDS) || 10;
 export const JWT_SECRET = env.JWT_SECRET_KEY || "vion_secret_key_change_me_in_production";
-export const FRONTEND_URL = env.FRONTEND_URL || "http://localhost:3000";
+export const FRONTEND_URL = (
+  env.FRONTEND_URL ||
+  process.env.FRONTEND_URL ||
+  process.env.CLIENT_URL ||
+  "http://localhost:3000"
+)
+  .trim()
+  .replace(/\/+$/, "");
 export const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
 export const ADMIN_EMAILS = (env.ADMIN_EMAILS || process.env.ADMIN_EMAILS || "")
   .split(",")

@@ -826,3 +826,35 @@ Created an educational handbook in `docs/` covering the distributed architecture
 - **Frontend Types**: Passed with 0 errors (`tsc --noEmit`).
 - **Frontend Build**: Passed with 0 errors (`bun run build` / Next.js Turbopack).
 - **Docker Compose**: Validated with `docker compose config` (exit 0).
+
+---
+
+## 🛠 Milestone 17: Production CORS Resolution & Cross-Site Cookie Authentication
+
+### 1. Root Cause Analysis
+- **Defect**: Browser requests from `https://vion.raiyan.app` to `https://vion-77wu.onrender.com/api/v1/...` were blocked with `400 Bad Request: CORS policy violation: Origin not allowed` and missing `Access-Control-Allow-Origin` headers.
+- **Root Cause**:
+  1. The user had configured `FRONTEND_URL="https://vion.raiyan.app/"` with a trailing slash in Render.
+  2. Standard web browsers (per RFC 6454) send `Origin: https://vion.raiyan.app` (without trailing slash).
+  3. The backend checked strict equality: `allowedOrigins.includes(origin)`. Since `"https://vion.raiyan.app/" !== "https://vion.raiyan.app"`, it evaluated to `false`.
+  4. In production, the CORS callback threw `new Error("CORS policy violation")`. Express passed this to `errorHandler`, which converted it to a `400 Bad Request` without CORS headers.
+  5. Auth cookies used `sameSite: "lax"`, which modern browsers block on cross-site XMLHttpRequests between `raiyan.app` and `onrender.com`.
+
+### 2. Implementation Fixes
+- **Origin Normalization (`backend/src/index.ts` & `backend/src/config/config.ts`)**:
+  - `normalizeOrigin`: Trims whitespace, removes wrapping quotes, strips trailing slashes, and lowercases.
+  - Added primary domain `https://vion.raiyan.app` and `https://www.vion.raiyan.app` as built-in production origins.
+  - Parses comma/space-separated values from `FRONTEND_URL`, `CLIENT_URL`, `ALLOWED_ORIGINS`, `CORS_ORIGIN`.
+  - Added subdomain matching for `*.raiyan.app`, Vercel previews (`*.vercel.app` containing `vion`), and Render domains (`*.onrender.com`).
+  - Added standard CORS preflight headers (`methods`, `allowedHeaders`, `exposedHeaders`, `optionsSuccessStatus: 204`).
+  - Replaced error-throwing with `callback(null, false)` and diagnostic logging.
+- **Cross-Site Cookies (`backend/src/modules/auth/auth.controller.ts`)**:
+  - Configured `sameSite: NODE_ENV === "production" ? "none" : "lax"` with `secure: NODE_ENV === "production"` across `signInUser`, `googleAuthUser`, and `signOutUser`.
+- **Queue Fault Tolerance (`backend/src/queue/videoQueue.ts`)**:
+  - Wrapped `queue.add()` in a try-catch block to gracefully handle transient Redis connection drops during test runs and local starts.
+
+### 3. Verification
+- **Backend Tests**: 82/82 passed (`bun test`).
+- **Backend Types**: Passed with 0 errors (`tsc --noEmit`).
+- **Frontend Types**: Passed with 0 errors (`tsc --noEmit`).
+

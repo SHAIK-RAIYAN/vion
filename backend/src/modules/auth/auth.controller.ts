@@ -20,7 +20,7 @@ const signInUser = asyncHandler(async (req: Request, res: Response) => {
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7,
     secure: NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: NODE_ENV === "production" ? "none" : "lax",
   });
 
   res.status(200).json({
@@ -38,7 +38,7 @@ const googleAuthUser = asyncHandler(async (req: Request, res: Response) => {
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 * 7,
     secure: NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: NODE_ENV === "production" ? "none" : "lax",
   });
 
   res.status(200).json({
@@ -55,7 +55,7 @@ const signOutUser = asyncHandler((req: Request, res: Response) => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: NODE_ENV === "production" ? "none" : "lax",
   });
 
   res.status(200).json({

@@ -112,12 +112,20 @@ export async function enqueueTranscodeJob(
     enqueuedAt: data.enqueuedAt || new Date().toISOString(),
   };
 
-  const job = await queue.add(`transcode:${data.uploadId}`, jobPayload, {
-    jobId: stableJobId,
-    ...opts,
-  });
+  try {
+    const job = await queue.add(`transcode:${data.uploadId}`, jobPayload, {
+      jobId: stableJobId,
+      ...opts,
+    });
 
-  return job;
+    return job;
+  } catch (err: any) {
+    console.warn(
+      `[Video Queue Warning] Failed to enqueue job for upload ${data.uploadId}:`,
+      err?.message || err,
+    );
+    return null;
+  }
 }
 
 /**

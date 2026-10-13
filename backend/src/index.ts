@@ -12,31 +12,129 @@ export const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-const allowedOrigins = [
-  FRONTEND_URL,
+/**
+ * Normalizes an origin string by trimming whitespace, removing wrapping quotes,
+ * and stripping any trailing slashes.
+ */
+export function normalizeOrigin(url: string): string {
+  if (!url) return "";
+  return url
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+// Build allowed origins set
+const allowedOriginsSet = new Set<string>();
+
+// 1. Built-in development & production domains
+[
   "http://localhost:3000",
   "http://localhost:5173",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
-].filter(Boolean) as string[];
+  "https://vion.raiyan.app",
+  "https://www.vion.raiyan.app",
+].forEach((o) => allowedOriginsSet.add(normalizeOrigin(o)));
+
+// 2. Load from environment sources (FRONTEND_URL, CLIENT_URL, ALLOWED_ORIGINS, CORS_ORIGIN)
+const rawOriginSources = [
+  FRONTEND_URL,
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+  process.env.ALLOWED_ORIGINS,
+  process.env.CORS_ORIGIN,
+  process.env.CORS_ORIGINS,
+];
+
+for (const source of rawOriginSources) {
+  if (!source) continue;
+  const parts = source.split(/[,\s]+/);
+  for (const part of parts) {
+    const norm = normalizeOrigin(part);
+    if (!norm) continue;
+    allowedOriginsSet.add(norm);
+    try {
+      const parsed = new URL(norm);
+      if (parsed.hostname.startsWith("www.")) {
+        const apex = `${parsed.protocol}//${parsed.hostname.slice(4)}${parsed.port ? `:${parsed.port}` : ""}`;
+        allowedOriginsSet.add(apex);
+      } else if (!parsed.hostname.includes("localhost") && !parsed.hostname.includes("127.0.0.1")) {
+        const www = `${parsed.protocol}//www.${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+        allowedOriginsSet.add(www);
+      }
+    } catch {
+      // ignore URL parsing error
+    }
+  }
+}
+
+/**
+ * Checks whether an incoming origin header is permitted.
+ */
+export function isOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true; // non-browser requests (mobile apps, server-to-server, curl)
+  const normalized = normalizeOrigin(origin);
+  if (allowedOriginsSet.has(normalized)) return true;
+
+  try {
+    const url = new URL(normalized);
+    // Allow any subdomain of raiyan.app (e.g. vion.raiyan.app, preview.raiyan.app)
+    if (url.hostname === "raiyan.app" || url.hostname.endsWith(".raiyan.app")) {
+      return true;
+    }
+    // Allow Vercel preview deployments for vion
+    if (url.hostname.endsWith(".vercel.app") && url.hostname.includes("vion")) {
+      return true;
+    }
+    // Allow Render deployments
+    if (url.hostname.endsWith(".onrender.com")) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, server-to-server, curl)
-      if (!origin) {
+      if (isOriginAllowed(origin)) {
         return callback(null, true);
       }
-      if (allowedOrigins.includes(origin)) {
+      if (NODE_ENV !== "production") {
         return callback(null, true);
       }
-      if (NODE_ENV === "production") {
-        return callback(new Error("CORS policy violation: Origin not allowed"), false);
-      }
-      // Permissive fallback in local development
-      return callback(null, true);
+      console.warn(
+        `[Vion CORS] Blocked request from origin: "${origin}". Allowed origins:`,
+        Array.from(allowedOriginsSet),
+      );
+      return callback(null, false);
     },
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+      "Range",
+      "Cache-Control",
+      "Pragma",
+      "If-None-Match",
+      "If-Modified-Since",
+    ],
+    exposedHeaders: [
+      "Content-Range",
+      "X-Content-Range",
+      "ETag",
+      "Cache-Control",
+    ],
+    optionsSuccessStatus: 204,
   }),
 );
 
