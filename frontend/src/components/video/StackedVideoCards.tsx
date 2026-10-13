@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Upload } from "@/types/api";
-import { gsap, ScrollTrigger, prefersReducedMotion } from "@/lib/gsap";
+import { gsap, prefersReducedMotion } from "@/lib/gsap";
 import { useGSAP } from "@gsap/react";
 import {
   Play,
@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Sparkles,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,33 +36,29 @@ function formatCardDate(dateString: string): string {
   }
 }
 
+// Stepped upward offsets so behind cards and their previews are clearly visible (matching reference)
 function getSlotY(slotIndex: number): number {
   if (slotIndex <= 0) return 0;
-  if (slotIndex === 1) return -44;
-  if (slotIndex === 2) return -86;
-  if (slotIndex === 3) return -126;
-  return -160;
+  if (slotIndex === 1) return -80; // 48px header + ~32px wallpaper preview exposed
+  if (slotIndex === 2) return -160; // 2nd card header + ~32px wallpaper preview exposed
+  if (slotIndex === 3) return -238;
+  return -310;
 }
 
 function getSlotScale(slotIndex: number): number {
   if (slotIndex <= 0) return 1;
-  if (slotIndex === 1) return 0.96;
-  if (slotIndex === 2) return 0.92;
-  if (slotIndex === 3) return 0.88;
-  return 0.84;
+  if (slotIndex === 1) return 0.965;
+  if (slotIndex === 2) return 0.93;
+  if (slotIndex === 3) return 0.895;
+  return 0.86;
 }
 
 function getSlotBrightness(slotIndex: number): number {
   if (slotIndex <= 0) return 1;
-  if (slotIndex === 1) return 0.72;
-  if (slotIndex === 2) return 0.52;
-  if (slotIndex === 3) return 0.36;
-  return 0.22;
-}
-
-// Flat alignment with zero tilt angles
-function getSlotRotation(): number {
-  return 0;
+  if (slotIndex === 1) return 0.88;
+  if (slotIndex === 2) return 0.75;
+  if (slotIndex === 3) return 0.62;
+  return 0.5;
 }
 
 export function StackedVideoCards({
@@ -76,7 +73,10 @@ export function StackedVideoCards({
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
   const endOfFeedRef = useRef<HTMLDivElement>(null);
 
-  const [, setActiveIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const isAnimating = useRef(false);
+  const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
 
   // Initialize card elements ref array
   cardsRef.current = [];
@@ -86,37 +86,11 @@ export function StackedVideoCards({
     }
   };
 
-  // Keyboard navigation for jumping between cards
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-      const scrollStep = window.innerHeight * 0.95;
-      if (e.key === "ArrowDown" || e.key === "PageDown") {
-        e.preventDefault();
-        window.scrollBy({ top: scrollStep, behavior: "smooth" });
-      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
-        e.preventDefault();
-        window.scrollBy({ top: -scrollStep, behavior: "smooth" });
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // GSAP ScrollTrigger falling card sequence
+  // Set initial card transforms on mount or when videos change
   useGSAP(
     () => {
-      if (!containerRef.current || !stageRef.current || videos.length === 0) return;
+      if (videos.length === 0) return;
 
-      const reducedMotion = prefersReducedMotion();
-
-      // Set initial positions for all cards without rotation angles
       cardsRef.current.forEach((cardEl, i) => {
         if (!cardEl) return;
         gsap.set(cardEl, {
@@ -126,147 +100,331 @@ export function StackedVideoCards({
           filter: `brightness(${getSlotBrightness(i)})`,
           opacity: 1,
           zIndex: (videos.length - i) * 10,
-          transformOrigin: "center center",
+          transformOrigin: "center bottom",
           force3D: true,
         });
       });
 
-      // If reduced motion is preferred, provide simple direct state
-      if (reducedMotion) {
-        gsap.set(endOfFeedRef.current, { autoAlpha: 1 });
-        return;
-      }
-
-      // Initial hide for end-of-feed message
       if (endOfFeedRef.current) {
-        gsap.set(endOfFeedRef.current, { autoAlpha: 0, scale: 0.95, y: 20 });
+        gsap.set(endOfFeedRef.current, {
+          autoAlpha: 0,
+          scale: 0.95,
+          y: 25,
+        });
       }
 
-      const totalSteps = videos.length;
-      const scrollDistance = totalSteps * window.innerHeight * 0.9;
-
-      const mainTl = gsap.timeline({
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: "top top",
-          end: `+=${scrollDistance}`,
-          pin: stageRef.current,
-          scrub: 0.6,
-          anticipatePin: 1,
-          invalidateOnRefresh: true,
-          onUpdate: (self) => {
-            const rawProgress = self.progress * totalSteps;
-            const currentCard = Math.min(
-              totalSteps - 1,
-              Math.floor(rawProgress),
-            );
-            setActiveIndex(currentCard);
-
-            // Pagination trigger when nearing end of feed
-            if (self.progress > 0.85 && hasNextPage && onLoadMore) {
-              onLoadMore();
-            }
-          },
-        },
-      });
-
-      // Choreograph each card's exit straight down with NO angle rotation and NO opacity fade
-      for (let i = 0; i < totalSteps; i++) {
-        const activeCard = cardsRef.current[i];
-        if (!activeCard) continue;
-
-        const timeSlot = i;
-
-        // 1. Current active card falls straight down (y translation only, rotation: 0, opacity: 1)
-        mainTl.to(
-          activeCard,
-          {
-            y: "115vh",
-            rotation: 0,
-            scale: 1,
-            // Preserving full opacity without fading
-            ease: "power1.inOut",
-            duration: 1,
-          },
-          timeSlot,
-        );
-
-        // 2. Subsequent cards advance straight forward into the foreground slot
-        for (let j = i + 1; j < totalSteps; j++) {
-          const subsequentCard = cardsRef.current[j];
-          if (!subsequentCard) continue;
-
-          const targetSlot = j - (i + 1);
-
-          mainTl.to(
-            subsequentCard,
-            {
-              y: getSlotY(targetSlot),
-              scale: getSlotScale(targetSlot),
-              rotation: 0,
-              filter: `brightness(${getSlotBrightness(targetSlot)})`,
-              ease: "power1.inOut",
-              duration: 1,
-            },
-            timeSlot,
-          );
-        }
-      }
-
-      // 3. Reveal Deliberate End-Of-Feed Screen when all cards have fallen
-      if (endOfFeedRef.current) {
-        mainTl.to(
-          endOfFeedRef.current,
-          {
-            autoAlpha: 1,
-            scale: 1,
-            y: 0,
-            duration: 0.8,
-            ease: "power2.out",
-          },
-          totalSteps - 0.4,
-        );
-      }
-
-      // Refresh ScrollTrigger to ensure pin dimensions sync accurately
-      ScrollTrigger.refresh();
+      setCurrentIndex(0);
+      isAnimating.current = false;
     },
     {
-      dependencies: [videos.length, hasNextPage],
+      dependencies: [videos.length],
       scope: containerRef,
       revertOnUpdate: true,
     },
   );
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Natural momentum drop: current card falls straight down, behind cards take foreground
+  const dropNextCard = useCallback(() => {
+    if (isAnimating.current || currentIndex >= videos.length) return;
+    isAnimating.current = true;
+
+    const reducedMotion = prefersReducedMotion();
+    const activeCard = cardsRef.current[currentIndex];
+    const duration = reducedMotion ? 0.2 : 0.8;
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        const nextIndex = currentIndex + 1;
+        setCurrentIndex(nextIndex);
+
+        // Check pagination if nearing feed end
+        if (nextIndex >= videos.length - 1 && hasNextPage && onLoadMore) {
+          onLoadMore();
+        }
+
+        // Brief cooldown to avoid double firing during wheel momentum
+        setTimeout(() => {
+          isAnimating.current = false;
+        }, 60);
+      },
+    });
+
+    // 1. Current card falls down straight (no angle, constant opacity 1)
+    if (activeCard) {
+      tl.to(
+        activeCard,
+        {
+          y: "125vh",
+          rotation: 0,
+          scale: 1,
+          opacity: 1,
+          duration,
+          ease: "power2.inOut",
+        },
+        0,
+      );
+    }
+
+    // 2. All subsequent cards advance forward by one slot
+    for (let j = currentIndex + 1; j < videos.length; j++) {
+      const nextCard = cardsRef.current[j];
+      if (!nextCard) continue;
+      const targetSlot = j - (currentIndex + 1);
+
+      tl.to(
+        nextCard,
+        {
+          y: getSlotY(targetSlot),
+          scale: getSlotScale(targetSlot),
+          rotation: 0,
+          filter: `brightness(${getSlotBrightness(targetSlot)})`,
+          duration,
+          ease: "power2.inOut",
+        },
+        0,
+      );
+    }
+
+    // 3. Reveal End of Feed screen if last card just fell
+    if (currentIndex + 1 >= videos.length && endOfFeedRef.current) {
+      tl.to(
+        endOfFeedRef.current,
+        {
+          autoAlpha: 1,
+          scale: 1,
+          y: 0,
+          duration: 0.75,
+          ease: "power2.out",
+        },
+        0.15,
+      );
+    }
+  }, [currentIndex, videos.length, hasNextPage, onLoadMore]);
+
+  // Restore previous card back into stack
+  const pickPrevCard = useCallback(() => {
+    if (isAnimating.current || currentIndex <= 0) return;
+    isAnimating.current = true;
+
+    const reducedMotion = prefersReducedMotion();
+    const prevIndex = currentIndex - 1;
+    const cardToRestore = cardsRef.current[prevIndex];
+    const duration = reducedMotion ? 0.2 : 0.75;
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setCurrentIndex(prevIndex);
+        setTimeout(() => {
+          isAnimating.current = false;
+        }, 60);
+      },
+    });
+
+    // Hide End-Of-Feed screen if coming back from the end
+    if (currentIndex === videos.length && endOfFeedRef.current) {
+      tl.to(
+        endOfFeedRef.current,
+        {
+          autoAlpha: 0,
+          scale: 0.95,
+          y: 20,
+          duration: 0.35,
+          ease: "power2.in",
+        },
+        0,
+      );
+    }
+
+    // 1. Previous card returns up into Slot 0
+    if (cardToRestore) {
+      tl.to(
+        cardToRestore,
+        {
+          y: getSlotY(0),
+          scale: getSlotScale(0),
+          rotation: 0,
+          filter: `brightness(${getSlotBrightness(0)})`,
+          opacity: 1,
+          duration,
+          ease: "power2.inOut",
+        },
+        0,
+      );
+    }
+
+    // 2. Subsequent cards push back by one slot
+    for (let j = currentIndex; j < videos.length; j++) {
+      const cardEl = cardsRef.current[j];
+      if (!cardEl) continue;
+      const targetSlot = j - prevIndex;
+
+      tl.to(
+        cardEl,
+        {
+          y: getSlotY(targetSlot),
+          scale: getSlotScale(targetSlot),
+          rotation: 0,
+          filter: `brightness(${getSlotBrightness(targetSlot)})`,
+          duration,
+          ease: "power2.inOut",
+        },
+        0,
+      );
+    }
+  }, [currentIndex, videos.length]);
+
+  // Rewind to beginning action
+  const rewindToBeginning = () => {
+    if (isAnimating.current) return;
+    isAnimating.current = true;
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setCurrentIndex(0);
+        isAnimating.current = false;
+      },
+    });
+
+    if (endOfFeedRef.current) {
+      tl.to(
+        endOfFeedRef.current,
+        { autoAlpha: 0, scale: 0.95, y: 20, duration: 0.3 },
+        0,
+      );
+    }
+
+    cardsRef.current.forEach((cardEl, i) => {
+      if (!cardEl) return;
+      tl.to(
+        cardEl,
+        {
+          y: getSlotY(i),
+          scale: getSlotScale(i),
+          rotation: 0,
+          filter: `brightness(${getSlotBrightness(i)})`,
+          opacity: 1,
+          duration: 0.65,
+          ease: "power2.inOut",
+        },
+        0.03 * i,
+      );
+    });
   };
+
+  // Scroll / Wheel gesture listener: after a certain scroll flick, card falls naturally
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    let accumulatedDelta = 0;
+    let deltaResetTimer: NodeJS.Timeout;
+
+    const handleWheel = (e: WheelEvent) => {
+      // If end of feed reached and scrolling down, allow default page flow
+      if (currentIndex >= videos.length && e.deltaY > 0) {
+        return;
+      }
+
+      e.preventDefault();
+
+      accumulatedDelta += e.deltaY;
+      clearTimeout(deltaResetTimer);
+      deltaResetTimer = setTimeout(() => {
+        accumulatedDelta = 0;
+      }, 180);
+
+      // Trigger threshold: a decisive wheel flick of 22px triggers natural card fall
+      if (accumulatedDelta > 22) {
+        accumulatedDelta = 0;
+        dropNextCard();
+      } else if (accumulatedDelta < -22) {
+        accumulatedDelta = 0;
+        pickPrevCard();
+      }
+    };
+
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      stage.removeEventListener("wheel", handleWheel);
+      clearTimeout(deltaResetTimer);
+    };
+  }, [dropNextCard, pickPrevCard, currentIndex, videos.length]);
+
+  // Touch gesture listener (mobile / tablet swipe)
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY.current = e.touches[0].clientY;
+      touchStartTime.current = Date.now();
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const deltaY = touchStartY.current - e.changedTouches[0].clientY;
+      const deltaTime = Date.now() - touchStartTime.current;
+
+      // Swift swipe or drag > 35px
+      if (Math.abs(deltaY) > 35 && deltaTime < 600) {
+        if (deltaY > 0) {
+          dropNextCard();
+        } else {
+          pickPrevCard();
+        }
+      }
+    };
+
+    stage.addEventListener("touchstart", handleTouchStart, { passive: true });
+    stage.addEventListener("touchend", handleTouchEnd, { passive: true });
+    return () => {
+      stage.removeEventListener("touchstart", handleTouchStart);
+      stage.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [dropNextCard, pickPrevCard]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "PageDown" || e.key === " ") {
+        e.preventDefault();
+        dropNextCard();
+      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
+        e.preventDefault();
+        pickPrevCard();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [dropNextCard, pickPrevCard]);
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full bg-black select-none"
-      style={{
-        height: `${Math.max(2, videos.length + 1) * 90}vh`,
-      }}
+      className="relative w-full h-[calc(100vh-3.5rem)] bg-black select-none overflow-hidden"
     >
-      {/* Sticky Stage pinned across scroll */}
+      {/* Sticky Stage Container */}
       <div
         ref={stageRef}
-        className="sticky top-0 w-full h-screen overflow-hidden flex flex-col items-center justify-center bg-black px-4 sm:px-6"
+        className="w-full h-full flex flex-col items-center justify-center bg-black px-4 sm:px-6 relative overflow-hidden"
       >
-        {/* Subtle Ambient Background Glow */}
+        {/* Subtle Ambient Background Depth */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-[#ff3c00]/5 rounded-full blur-[140px]" />
-          <div className="absolute -bottom-[20%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-white/[0.02] rounded-full blur-[160px]" />
+          <div className="absolute -top-[15%] left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#ff3c00]/4 rounded-full blur-[150px]" />
         </div>
 
-        {/* Stack Container */}
-        <div className="relative w-full max-w-5xl lg:max-w-6xl aspect-[16/10] sm:aspect-[16/9.5] max-h-[72vh] flex items-center justify-center">
+        {/* Stack Container shifted downward to give generous vertical room for back cards to fan upward */}
+        <div className="relative w-full max-w-5xl lg:max-w-6xl aspect-[16/10] sm:aspect-[16/9.5] max-h-[66vh] flex items-center justify-center mt-12 sm:mt-20">
           {/* =========================================================================
               LAYERED VIDEO CARDS
               ========================================================================= */}
-          {videos.map((video) => {
+          {videos.map((video, index) => {
             const dateText = formatCardDate(video.createdAt);
             const channelName = video.channel?.channelName || "Creator";
             const topResolution = video.videos?.[0]?.resolution || "4K";
@@ -275,7 +433,15 @@ export function StackedVideoCards({
               <div
                 key={video.id}
                 ref={addToCardsRef}
-                className="absolute inset-0 rounded-2xl sm:rounded-3xl border border-white/10 bg-neutral-950 overflow-hidden shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col"
+                onClick={() => {
+                  // Clicking a visible behind card advances directly to it
+                  if (index > currentIndex && !isAnimating.current) {
+                    dropNextCard();
+                  }
+                }}
+                className={`absolute inset-0 rounded-xl sm:rounded-2xl border border-white/12 bg-neutral-950 overflow-hidden shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
+                  index > currentIndex ? "cursor-pointer hover:border-white/25" : ""
+                }`}
               >
                 {/* 1. Slim Black Metadata Header (Upload Date | Title | Channel) */}
                 <div className="w-full h-11 sm:h-12 bg-black/95 backdrop-blur-md border-b border-white/8 px-4 sm:px-6 flex items-center justify-between gap-3 text-xs shrink-0 z-20">
@@ -288,6 +454,12 @@ export function StackedVideoCards({
                   <div className="font-bold text-xs sm:text-sm tracking-wide text-white text-center truncate flex-1 px-2">
                     <Link
                       href={`/watch/${video.id}`}
+                      onClick={(e) => {
+                        // If not the front card, don't open link; advance card instead
+                        if (index !== currentIndex) {
+                          e.preventDefault();
+                        }
+                      }}
                       className="hover:text-neutral-200 transition-colors"
                     >
                       {video.title}
@@ -316,13 +488,19 @@ export function StackedVideoCards({
                 {/* 2. Large Cinematic Video Preview */}
                 <Link
                   href={`/watch/${video.id}`}
+                  onClick={(e) => {
+                    // If not front card, clicking advances stack instead of opening video
+                    if (index !== currentIndex) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="relative flex-1 w-full bg-black overflow-hidden group cursor-pointer block"
                 >
                   {video.thumbnailUrl ? (
                     <img
                       src={video.thumbnailUrl}
                       alt={video.title}
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out"
+                      className="w-full h-full object-cover group-hover:scale-[1.015] transition-transform duration-700 ease-out"
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-radial from-neutral-900 to-black text-neutral-400">
@@ -336,12 +514,14 @@ export function StackedVideoCards({
                   {/* Cinematic Vignette Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 
-                  {/* Center Play Glyph on Hover */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl transform scale-90 group-hover:scale-100 transition-transform">
-                      <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                  {/* Center Play Glyph on Hover (Active card only) */}
+                  {index === currentIndex && (
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <div className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-2xl transform scale-90 group-hover:scale-100 transition-transform">
+                        <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Bottom Metadata Badges */}
                   <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-white/90 pointer-events-none">
@@ -390,12 +570,12 @@ export function StackedVideoCards({
               You&apos;ve seen every frame for now. Stay tuned as independent creators publish new high-definition live wallpapers.
             </p>
 
-            {/* Action Buttons: Only Rewind to Beginning (+ Explore All if subscriptions) */}
+            {/* Action Buttons: Only Rewind to Beginning */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={scrollToTop}
+                onClick={rewindToBeginning}
                 className="rounded-full text-xs font-semibold px-6 h-9 border-white/20 bg-white/5 text-white hover:bg-white/15 gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -407,7 +587,7 @@ export function StackedVideoCards({
                   variant="ghost"
                   size="sm"
                   onClick={() => router.push("/")}
-                  className="rounded-full text-xs text-neutral-400 hover:text-white px-4 h-9"
+                  className="rounded-full text-xs text-neutral-400 hover:text-white px-4 h-9 cursor-pointer"
                 >
                   Explore All Wallpapers
                 </Button>
@@ -415,6 +595,15 @@ export function StackedVideoCards({
             </div>
           </div>
         </div>
+
+        {/* Subtle Scroll Hint when on card 0 */}
+        {currentIndex === 0 && (
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 text-[10px] font-mono tracking-widest uppercase text-neutral-400 animate-pulse pointer-events-none">
+            <span>Scroll or press</span>
+            <ChevronDown className="w-3 h-3 text-[#ff3c00]" />
+            <span>down to discover</span>
+          </div>
+        )}
       </div>
     </div>
   );
