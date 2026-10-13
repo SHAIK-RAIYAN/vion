@@ -419,8 +419,8 @@ export function StackedVideoCards({
           <div className="absolute -top-[15%] left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-[#ff3c00]/4 rounded-full blur-[150px]" />
         </div>
 
-        {/* Stack Container shifted downward to give generous vertical room for back cards to fan upward */}
-        <div className="relative w-full max-w-5xl lg:max-w-6xl aspect-[16/10] sm:aspect-[16/9.5] max-h-[66vh] flex items-center justify-center mt-12 sm:mt-20">
+        {/* Stack Container with balanced width and height proportions */}
+        <div className="relative w-full max-w-3xl sm:max-w-4xl lg:max-w-[54rem] aspect-[16/11] sm:aspect-[16/10] max-h-[68vh] flex items-center justify-center mt-12 sm:mt-20">
           {/* =========================================================================
               LAYERED VIDEO CARDS
               ========================================================================= */}
