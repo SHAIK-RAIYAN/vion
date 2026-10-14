@@ -14,6 +14,14 @@ RUN bun install --frozen-lockfile --production
 FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV FFMPEG_PATH=ffmpeg
+ENV FFPROBE_PATH=ffprobe
+ENV FFMPEG_PRESET=veryfast
+ENV FFMPEG_THREADS=1
+ENV MAX_RENDITIONS=2
+ENV WORKER_CONCURRENCY=1
+ENV FAST_TRANSCODE=true
+ENV TEMP_MEDIA_DIR=/app/tmp/media
 
 WORKDIR /app
 

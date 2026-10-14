@@ -20,6 +20,10 @@ import {
   STORAGE_RAW_BUCKET,
   MAX_PROCESSING_DURATION_SECONDS,
   isStorageConfigured,
+  FFMPEG_PRESET,
+  FFMPEG_THREADS,
+  MAX_RENDITIONS,
+  FAST_TRANSCODE,
 } from "../config/config";
 import {
   type RenditionProfile,
@@ -181,9 +185,13 @@ export async function inspectSourceMedia(localSourcePath: string): Promise<Video
 /**
  * Determines eligible output qualities based on source dimensions.
  * Strictly prevents upscaling: a 480p source will only produce 480p and 360p.
+ * Uses MAX_RENDITIONS to bound CPU load on zero-budget / free-tier containers.
  */
-export function determineTargetRenditions(videoInfo: VideoInfo): RenditionProfile[] {
-  return getEligibleRenditions(videoInfo.width, videoInfo.height);
+export function determineTargetRenditions(
+  videoInfo: VideoInfo,
+  maxRenditions = MAX_RENDITIONS,
+): RenditionProfile[] {
+  return getEligibleRenditions(videoInfo.width, videoInfo.height, maxRenditions);
 }
 
 // ============================================================================
@@ -211,6 +219,7 @@ export interface EncodeRenditionParams {
  * 5. Scale Filter: scale=-2:<height> preserves aspect ratio while ensuring dimensions are even.
  * 6. Audio Compatibility: If source has no audio track, injects silent stereo AAC audio so
  *    players (e.g. Safari, AVPlayer) do not encounter decode stalls.
+ * 7. Low-CPU Tuning: -threads FFMPEG_THREADS, -tune fastdecode, -preset FFMPEG_PRESET.
  */
 export async function encodeRenditionHls(
   params: EncodeRenditionParams,
@@ -228,7 +237,12 @@ export async function encodeRenditionHls(
   const fps = frameRate > 0 ? frameRate : 30;
   const gopSize = Math.max(24, Math.round(fps * 6));
 
-  const args: string[] = ["-i", sourcePath];
+  const args: string[] = [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-threads", FFMPEG_THREADS.toString(),
+    "-i", sourcePath,
+  ];
 
   // If source video lacks audio, synthesize silent stereo audio track via lavfi
   if (!hasAudio) {
@@ -237,24 +251,17 @@ export async function encodeRenditionHls(
 
   args.push(
     // Video mapping & encoding
-    "-map",
-    "0:v:0",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast", // Sensible balance of speed and CPU efficiency
-    "-profile:v",
-    "main",
-    "-pix_fmt",
-    "yuv420p",
-    "-b:v",
-    rendition.videoBitrate,
-    "-maxrate",
-    rendition.maxrate,
-    "-bufsize",
-    rendition.bufsize,
-    "-vf",
-    `scale=-2:${rendition.height}`,
+    "-map", "0:v:0",
+    "-c:v", "libx264",
+    "-preset", FFMPEG_PRESET,
+    ...(FAST_TRANSCODE ? ["-tune", "fastdecode"] : []),
+    "-profile:v", "main",
+    "-pix_fmt", "yuv420p",
+    "-b:v", rendition.videoBitrate,
+    "-maxrate", rendition.maxrate,
+    "-bufsize", rendition.bufsize,
+    "-vf", `scale=-2:${rendition.height}`,
+    "-threads", FFMPEG_THREADS.toString(),
 
     // GOP / Keyframe Alignment for Apple HLS
     "-g",

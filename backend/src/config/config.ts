@@ -32,6 +32,14 @@ const envSchema = z.object({
   TEMP_MEDIA_DIR: z.string().default(path.resolve(process.cwd(), "tmp/media")),
   MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(500 * 1024 * 1024), // 500 MB default
   MAX_PROCESSING_DURATION_SECONDS: z.coerce.number().default(1800), // 30 minutes default
+
+  // Transcoding Performance & Worker Concurrency (Zero-budget constrained settings)
+  FFMPEG_PRESET: z.enum(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"]).default("veryfast"),
+  FFMPEG_THREADS: z.coerce.number().default(1),
+  MAX_RENDITIONS: z.coerce.number().default(2),
+  WORKER_CONCURRENCY: z.coerce.number().default(1),
+  FAST_TRANSCODE: z.coerce.boolean().default(true),
+  ENABLE_WORKER: z.coerce.boolean().default(true),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -84,6 +92,14 @@ export const TEMP_MEDIA_DIR = path.resolve(env.TEMP_MEDIA_DIR || path.resolve(pr
 export const MAX_UPLOAD_SIZE_BYTES = Number(env.MAX_UPLOAD_SIZE_BYTES) || 500 * 1024 * 1024;
 export const MAX_PROCESSING_DURATION_SECONDS = Number(env.MAX_PROCESSING_DURATION_SECONDS) || 1800;
 
+// Worker Concurrency & Transcoding Optimizations
+export const FFMPEG_PRESET = env.FFMPEG_PRESET || "veryfast";
+export const FFMPEG_THREADS = Number(env.FFMPEG_THREADS) || 1;
+export const MAX_RENDITIONS = Number(env.MAX_RENDITIONS) || 2;
+export const WORKER_CONCURRENCY = Number(env.WORKER_CONCURRENCY) || 1;
+export const FAST_TRANSCODE = env.FAST_TRANSCODE !== false;
+export const ENABLE_WORKER = env.ENABLE_WORKER !== false;
+
 // Auto-initialize temp media directory
 try {
   if (!fs.existsSync(TEMP_MEDIA_DIR)) {
@@ -132,6 +148,14 @@ export function getSanitizedConfigSummary() {
     redis: {
       isConfigured: isRedisConfigured(),
       host: REDIS_URL ? REDIS_URL.replace(/^redis:\/\/(?:[^:@]+:[^:@]+@)?([^:/]+).*$/, "$1") : "not_configured",
+    },
+    worker: {
+      enabled: ENABLE_WORKER,
+      concurrency: WORKER_CONCURRENCY,
+      ffmpegPreset: FFMPEG_PRESET,
+      ffmpegThreads: FFMPEG_THREADS,
+      maxRenditions: MAX_RENDITIONS,
+      fastTranscode: FAST_TRANSCODE,
     },
     limits: {
       maxUploadSizeBytes: MAX_UPLOAD_SIZE_BYTES,

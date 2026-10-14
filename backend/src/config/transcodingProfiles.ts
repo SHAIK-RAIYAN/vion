@@ -108,14 +108,35 @@ export function makeEven(val: number): number {
 export function getEligibleRenditions(
   sourceWidth: number,
   sourceHeight: number,
+  maxRenditions?: number,
 ): RenditionProfile[] {
-  // Filter all standard profiles where profile.height <= sourceHeight
+  // Filter all standard profiles where profile.height <= sourceHeight (Anti-upscaling)
   const eligible = STANDARD_QUALITY_LADDER.filter(
     (profile) => profile.height <= sourceHeight,
   );
 
   // If source height is equal to or greater than 360p, return filtered profiles
   if (eligible.length > 0) {
+    if (typeof maxRenditions === "number" && maxRenditions > 0 && maxRenditions < eligible.length) {
+      if (maxRenditions === 1) {
+        return [eligible[0]!];
+      }
+      if (maxRenditions === 2) {
+        // Return highest eligible resolution and lowest baseline (360p) for optimal adaptive range
+        return [eligible[0]!, eligible[eligible.length - 1]!];
+      }
+      // General distribution across available ladder
+      const step = (eligible.length - 1) / (maxRenditions - 1);
+      const selected: RenditionProfile[] = [];
+      for (let i = 0; i < maxRenditions; i++) {
+        const idx = Math.round(i * step);
+        const item = eligible[idx]!;
+        if (!selected.includes(item)) {
+          selected.push(item);
+        }
+      }
+      return selected;
+    }
     return eligible;
   }
 

@@ -7,6 +7,7 @@ import {
   type TranscodeJobData,
 } from "./videoQueue";
 import { processTranscodeJob, createTranscodingWorker } from "../worker/transcodingWorker";
+import { WORKER_CONCURRENCY } from "../config/config";
 import { db } from "../prisma/db";
 
 describe("Background Video Processing Queue & Worker", () => {
@@ -193,7 +194,7 @@ describe("Background Video Processing Queue & Worker", () => {
     it("supports graceful worker initialization and clean closure", async () => {
       const worker = createTranscodingWorker();
       expect(worker).toBeDefined();
-      expect(worker.opts.concurrency).toBe(2);
+      expect(worker.opts.concurrency).toBe(WORKER_CONCURRENCY);
 
       // Verify graceful close
       await worker.close();

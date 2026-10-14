@@ -1,4 +1,5 @@
 import { createTranscodingWorker } from "./transcodingWorker";
+import { reconcileUploadQueue } from "./reconcileQueue";
 import { checkRedisHealth, closeRedisClient } from "../queue/redisClient";
 import { getSanitizedConfigSummary, isRedisConfigured } from "../config/config";
 import { checkStorageHealth } from "../services/storageService";
@@ -34,6 +35,13 @@ async function main() {
     console.warn(`[Worker Storage Notice]: ${storageHealth.message}`);
   } else {
     console.info(`[Worker] Supabase Storage verified (${storageHealth.buckets?.length || 0} buckets detected)`);
+  }
+
+  // Reconcile database state: re-enqueue any dropped or interrupted uploads on startup
+  try {
+    await reconcileUploadQueue();
+  } catch (reconcileErr: any) {
+    console.warn(`[Worker Warning] Startup queue reconciliation notice: ${reconcileErr.message}`);
   }
 
   // Initialize and spin up worker

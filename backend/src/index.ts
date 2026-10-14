@@ -155,15 +155,12 @@ export const server = app.listen(PORT, async () => {
     console.warn("[Vion Server] Storage initialization notice:", err?.message || err);
   }
 
-  // Optional embedded worker for development environments when enabled
-  if (process.env.ENABLE_WORKER === "true" || process.env.RUN_WORKER === "true") {
-    try {
-      const { createTranscodingWorker } = await import("./worker/transcodingWorker");
-      createTranscodingWorker();
-      console.log("[Vion Server] Embedded transcoding worker started (ENABLE_WORKER=true).");
-    } catch (err: any) {
-      console.warn("[Vion Server] Failed to initialize embedded worker:", err?.message || err);
-    }
+  // Launch dedicated worker process supervisor inside the same container
+  try {
+    const { startWorkerSupervisor } = await import("./worker/workerSupervisor");
+    startWorkerSupervisor();
+  } catch (err: any) {
+    console.warn("[Vion Server] Failed to initialize worker supervisor:", err?.message || err);
   }
 });
 
@@ -173,6 +170,14 @@ async function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.info(`\n[Vion Server] Received ${signal}. Closing HTTP listener gracefully...`);
+
+  // First terminate background worker child process cleanly
+  try {
+    const { stopWorkerSupervisor } = await import("./worker/workerSupervisor");
+    await stopWorkerSupervisor();
+  } catch (err: any) {
+    console.warn("[Vion Server] Error terminating worker supervisor:", err?.message || err);
+  }
 
   server.close(async () => {
     console.info("[Vion Server] HTTP listener terminated.");

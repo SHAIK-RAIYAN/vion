@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { Worker, type Job } from "bullmq";
 import {
   VIDEO_TRANSCODE_QUEUE_NAME,
@@ -11,6 +13,8 @@ import {
   STORAGE_RAW_BUCKET,
   FFMPEG_PATH,
   FFPROBE_PATH,
+  WORKER_CONCURRENCY,
+  TEMP_MEDIA_DIR,
 } from "../config/config";
 import * as storageService from "../services/storageService";
 import * as mediaService from "../services/mediaService";
@@ -69,60 +73,81 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
       processingStatus: "TRANSCODING",
     });
 
-    // 3. Stage: Verify raw object exists in storage
+    // 3. Stage: Verify raw object exists in storage and download once to worker workspace
     await job.updateProgress(15);
-    if (isStorageConfigured()) {
-      console.info(`${logPrefix} Verifying raw media object in storage key: ${rawVideoKey}`);
-      const folder = `raw/${channelId}/${uploadId}`;
-      const files = await storageService.listFiles(STORAGE_RAW_BUCKET, folder);
-      if (!files || files.length === 0) {
-        throw new Error(`Raw media file is missing in storage for upload ${uploadId} under folder: ${folder}`);
-      }
-    }
-
-    // 4. Stage: Run media processing service (thumbnails & inspection)
-    await job.updateProgress(25);
-    console.info(`${logPrefix} Running media-inspection and thumbnail generation (FFmpeg: ${FFMPEG_PATH})...`);
-    let activeThumbnailUrl = upload.thumbnailUrl;
+    const workerJobDir = path.join(TEMP_MEDIA_DIR, `worker_job_${uploadId}_${Date.now()}`);
+    fs.mkdirSync(workerJobDir, { recursive: true });
+    let localRawPath: string | undefined;
 
     try {
-      const thumbResult = await mediaService.makeThumbnails({
+      if (isStorageConfigured()) {
+        console.info(`${logPrefix} Verifying raw media object in storage key: ${rawVideoKey}`);
+        const folder = `raw/${channelId}/${uploadId}`;
+        const files = await storageService.listFiles(STORAGE_RAW_BUCKET, folder);
+        if (!files || files.length === 0) {
+          throw new Error(`Raw media file is missing in storage for upload ${uploadId} under folder: ${folder}`);
+        }
+
+        // Download raw video once to avoid redundant network transfers
+        console.info(`${logPrefix} Downloading raw video once to worker scratch workspace...`);
+        const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, rawVideoKey);
+        localRawPath = path.join(workerJobDir, "source_input.mp4");
+        fs.writeFileSync(localRawPath, buffer);
+      }
+
+      // 4. Stage: Run media processing service (thumbnails & inspection)
+      await job.updateProgress(25);
+      console.info(`${logPrefix} Running media-inspection and thumbnail generation (FFmpeg: ${FFMPEG_PATH})...`);
+      let activeThumbnailUrl = upload.thumbnailUrl;
+
+      try {
+        const thumbResult = await mediaService.makeThumbnails({
+          uploadId,
+          channelId,
+          sourceFilePath: localRawPath,
+          sourceStorageKey: localRawPath ? undefined : rawVideoKey,
+          updateDatabase: true,
+        });
+        activeThumbnailUrl = thumbResult.defaultThumbnailUrl;
+        console.info(`${logPrefix} Thumbnails generated successfully: ${activeThumbnailUrl}`);
+      } catch (thumbErr: any) {
+        console.warn(`${logPrefix} Thumbnail extraction notice: ${thumbErr.message}`);
+      }
+
+      // 5. Stage: Run multi-bitrate HLS adaptive transcoding pipeline
+      console.info(`${logPrefix} Starting adaptive HLS transcoding pipeline (FFmpeg: ${FFMPEG_PATH})...`);
+      const transcodeResult = await transcodingService.processVideoHlsPipeline({
         uploadId,
         channelId,
-        sourceStorageKey: rawVideoKey,
-        updateDatabase: true,
+        sourceFilePath: localRawPath,
+        sourceStorageKey: localRawPath ? undefined : rawVideoKey,
+        activeThumbnailUrl: activeThumbnailUrl || undefined,
+        onProgress: async (stage, pct) => {
+          // Map pipeline progress (0-100) into BullMQ job progress (30-95)
+          const jobPct = 30 + Math.round(pct * 0.65);
+          await job.updateProgress(jobPct);
+        },
       });
-      activeThumbnailUrl = thumbResult.defaultThumbnailUrl;
-      console.info(`${logPrefix} Thumbnails generated successfully: ${activeThumbnailUrl}`);
-    } catch (thumbErr: any) {
-      console.warn(`${logPrefix} Thumbnail extraction notice: ${thumbErr.message}`);
+
+      await job.updateProgress(100);
+      console.info(
+        `${logPrefix} Transcode job completed successfully. Manifest: ${transcodeResult.masterManifestUrl} (${transcodeResult.renditions.length} renditions)`,
+      );
+
+      return {
+        success: true,
+        uploadId,
+        manifestUrl: transcodeResult.masterManifestUrl,
+        thumbnailUrl: activeThumbnailUrl || undefined,
+      };
+    } finally {
+      // Guaranteed cleanup of worker scratch directory
+      try {
+        if (fs.existsSync(workerJobDir)) {
+          fs.rmSync(workerJobDir, { recursive: true, force: true });
+        }
+      } catch {}
     }
-
-    // 5. Stage: Run multi-bitrate HLS adaptive transcoding pipeline
-    console.info(`${logPrefix} Starting adaptive HLS transcoding pipeline (FFmpeg: ${FFMPEG_PATH})...`);
-    const transcodeResult = await transcodingService.processVideoHlsPipeline({
-      uploadId,
-      channelId,
-      sourceStorageKey: rawVideoKey,
-      activeThumbnailUrl: activeThumbnailUrl || undefined,
-      onProgress: async (stage, pct) => {
-        // Map pipeline progress (0-100) into BullMQ job progress (30-95)
-        const jobPct = 30 + Math.round(pct * 0.65);
-        await job.updateProgress(jobPct);
-      },
-    });
-
-    await job.updateProgress(100);
-    console.info(
-      `${logPrefix} Transcode job completed successfully. Manifest: ${transcodeResult.masterManifestUrl} (${transcodeResult.renditions.length} renditions)`,
-    );
-
-    return {
-      success: true,
-      uploadId,
-      manifestUrl: transcodeResult.masterManifestUrl,
-      thumbnailUrl: activeThumbnailUrl || undefined,
-    };
   } catch (err: any) {
     console.error(`${logPrefix} Transcoding error on attempt ${attemptNum}/${maxAttempts}: ${err.message}`);
 
@@ -153,7 +178,7 @@ export function createTranscodingWorker(): Worker<TranscodeJobData> {
     processTranscodeJob,
     {
       connection,
-      concurrency: 2, // Concurrency limit to prevent CPU starvation
+      concurrency: WORKER_CONCURRENCY, // Default 1: strictly serial processing to prevent CPU/OOM death on free tier
       limiter: {
         max: 5,
         duration: 1000,
