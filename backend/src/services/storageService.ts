@@ -440,6 +440,51 @@ export async function listFiles(
 }
 
 /**
+ * Fast check whether an object exists in a storage bucket.
+ */
+export async function checkFileExists(bucket: string, storagePath: string): Promise<boolean> {
+  if (!isStorageConfigured()) return false;
+  try {
+    const client = getSupabaseClient();
+    const cleanPath = storagePath.replace(/^\/+/, "");
+    const parts = cleanPath.split("/");
+    const fileName = parts.pop();
+    const folder = parts.join("/");
+
+    if (!fileName) return false;
+
+    const { data, error } = await client.storage
+      .from(bucket)
+      .list(folder, { limit: 20, search: fileName });
+
+    if (error || !data) return false;
+    return data.some((item) => item.name === fileName);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Finds the first available raw video file path for an upload in the RAW bucket.
+ */
+export async function findRawVideoKey(channelId: string, uploadId: string): Promise<string | null> {
+  if (!isStorageConfigured()) return null;
+  try {
+    const client = getSupabaseClient();
+    const folder = `raw/${channelId}/${uploadId}`;
+    const { data, error } = await client.storage.from(STORAGE_RAW_BUCKET).list(folder, { limit: 10 });
+    if (error || !data || data.length === 0) return null;
+    const match = data.find((item) => item.name && item.name.match(/\.(mp4|mov|webm|mkv|avi)$/i)) || data[0];
+    if (match && match.name) {
+      return `${folder}/${match.name}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Health check helper for Supabase Storage.
  * Verifies connectivity and reports status gracefully.
  */

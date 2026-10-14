@@ -3,6 +3,7 @@ import { AppError } from "../../utils/AppError";
 import * as storageService from "../../services/storageService";
 import {
   STORAGE_PROCESSED_BUCKET,
+  STORAGE_RAW_BUCKET,
   STORAGE_THUMBNAILS_BUCKET,
   isStorageConfigured,
 } from "../../config/config";
@@ -448,16 +449,38 @@ export async function getVideoDownload(
   let downloadUrl = "";
 
   if (isStorageConfigured()) {
-    try {
-      downloadUrl = await storageService.createSignedDownloadUrl(
-        STORAGE_PROCESSED_BUCKET,
-        storageKey,
-        expiresInSeconds,
-        { download: downloadFileName },
-      );
-    } catch (storageErr: any) {
-      // Fallback to public URL if signed URL creation fails or object was uploaded as public
-      downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+    // 1. Check if the progressive MP4 rendition exists in the processed bucket
+    const mp4Exists = await storageService.checkFileExists(STORAGE_PROCESSED_BUCKET, storageKey);
+
+    if (mp4Exists) {
+      try {
+        downloadUrl = await storageService.createSignedDownloadUrl(
+          STORAGE_PROCESSED_BUCKET,
+          storageKey,
+          expiresInSeconds,
+          { download: downloadFileName },
+        );
+      } catch {
+        downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+      }
+    } else {
+      // 2. Fallback to raw video in STORAGE_RAW_BUCKET if specific MP4 rendition is not present
+      const rawKey = await storageService.findRawVideoKey(video.channelId, video.id);
+      if (rawKey) {
+        try {
+          downloadUrl = await storageService.createSignedDownloadUrl(
+            STORAGE_RAW_BUCKET,
+            rawKey,
+            expiresInSeconds,
+            { download: downloadFileName },
+          );
+        } catch {
+          downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+        }
+      } else {
+        // 3. Fallback to public URL for rendition
+        downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+      }
     }
   } else {
     // If running in local mock environment without remote Supabase
