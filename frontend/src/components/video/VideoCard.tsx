@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import type { Upload } from "@/types/api";
 import { Play, User as UserIcon } from "lucide-react";
 
@@ -45,13 +44,13 @@ export function VideoCard({ video }: VideoCardProps) {
           {dateText}
         </span>
 
-        <Link
+        <CurtainLink
           href={`/watch/${video.id}`}
           className="font-bold text-xs tracking-wide text-white truncate text-center flex-1 hover:text-neutral-200 transition-colors"
           title={video.title}
         >
           {video.title}
-        </Link>
+        </CurtainLink>
 
         <div className="flex items-center gap-1.5 shrink-0 max-w-[140px] sm:max-w-xs justify-end">
           {video.channel?.profilePictureUrl ? (
@@ -72,7 +71,7 @@ export function VideoCard({ video }: VideoCardProps) {
       </div>
 
       {/* Cinematic Preview */}
-      <Link
+      <CurtainLink
         href={`/watch/${video.id}`}
         className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block"
       >
@@ -113,7 +112,7 @@ export function VideoCard({ video }: VideoCardProps) {
             {formatViews(video.viewCount)}
           </span>
         </div>
-      </Link>
+      </CurtainLink>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import { useRouter } from "next/navigation";
 import type { Upload } from "@/types/api";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
@@ -452,7 +453,7 @@ export function StackedVideoCards({
 
                   {/* Top Center: Video / Wallpaper Title */}
                   <div className="font-bold text-xs sm:text-sm tracking-wide text-white text-center truncate flex-1 px-2">
-                    <Link
+                    <CurtainLink
                       href={`/watch/${video.id}`}
                       onClick={(e) => {
                         // If not the front card, don't open link; advance card instead
@@ -463,7 +464,7 @@ export function StackedVideoCards({
                       className="hover:text-neutral-200 transition-colors"
                     >
                       {video.title}
-                    </Link>
+                    </CurtainLink>
                   </div>
 
                   {/* Top Right: Channel Avatar and Channel Name (Always Shown) */}
@@ -486,7 +487,7 @@ export function StackedVideoCards({
                 </div>
 
                 {/* 2. Large Cinematic Video Preview */}
-                <Link
+                <CurtainLink
                   href={`/watch/${video.id}`}
                   onClick={(e) => {
                     // If not front card, clicking advances stack instead of opening video
@@ -541,7 +542,7 @@ export function StackedVideoCards({
                       <ExternalLink className="w-3 h-3" />
                     </div>
                   </div>
-                </Link>
+                </CurtainLink>
               </div>
             );
           })}

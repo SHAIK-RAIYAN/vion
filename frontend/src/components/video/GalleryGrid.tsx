@@ -2,6 +2,7 @@
 
 import React, { useRef } from "react";
 import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
@@ -82,13 +83,13 @@ export function GalleryGrid({
                   {dateText}
                 </span>
 
-                <Link
+                <CurtainLink
                   href={`/watch/${video.id}`}
                   className="font-bold text-xs tracking-wide text-white truncate text-center flex-1 hover:text-neutral-200 transition-colors"
                   title={video.title}
                 >
                   {video.title}
-                </Link>
+                </CurtainLink>
 
                 <div className="flex items-center gap-1.5 shrink-0 max-w-[140px] sm:max-w-xs justify-end">
                   {video.channel?.profilePictureUrl ? (
@@ -109,7 +110,7 @@ export function GalleryGrid({
               </div>
 
               {/* Cinematic Thumbnail Preview */}
-              <Link
+              <CurtainLink
                 href={`/watch/${video.id}`}
                 className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block"
               >
@@ -150,7 +151,7 @@ export function GalleryGrid({
                     {video.viewCount} views
                   </span>
                 </div>
-              </Link>
+              </CurtainLink>
             </div>
           );
         })}

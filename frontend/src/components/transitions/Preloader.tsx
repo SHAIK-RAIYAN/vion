@@ -2,22 +2,21 @@
 
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
 import { useEffect, useRef, useState } from "react";
-import { useCurtainTransition } from "./CurtainTransitionContext";
+import { useCurtainTransition, WELCOME_SESSION_KEY } from "./CurtainTransitionContext";
 import { CURTAIN_CONFIG } from "./transitionConfig";
 
 /**
  * Initial Preloader Component
  *
  * Displays the vibrant red-orange screen with 4 tumbling loading blocks
- * and clipped uppercase "LOADING" text, matching Screenshot 1.
+ * and clipped uppercase "WELCOME" text ONLY when first coming to the site.
  *
- * Waits for genuine critical application readiness (document fonts,
- * critical initial feed/auth data, hydration), then sequences the exit
- * timeline and delegates the diagonal curtain reveal to CurtainTransitionContext.
+ * Subsequent route navigations and path changes NEVER show the welcome text;
+ * they smoothly execute the left-to-right falling slider via CurtainTransition.
  */
 export function Preloader() {
   const { reveal, isInitialLoad, setIsInitialLoad } = useCurtainTransition();
-  const [isMounted, setIsMounted] = useState(true);
+  const [shouldRender, setShouldRender] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const centerGroupRef = useRef<HTMLDivElement>(null);
@@ -28,10 +27,28 @@ export function Preloader() {
   const isRevealingRef = useRef(false);
   const loopTlRef = useRef<gsap.core.Timeline | null>(null);
 
-  // If initial load was already finished (e.g. client nav back to root), don't show
+  // Check on client mount whether welcome was already shown in this session
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const alreadyWelcomed = sessionStorage.getItem(WELCOME_SESSION_KEY) === "true";
+        if (alreadyWelcomed || !isInitialLoad) {
+          setIsInitialLoad(false);
+          setShouldRender(false);
+          return;
+        }
+      }
+    } catch {}
+
+    if (isInitialLoad) {
+      setShouldRender(true);
+    }
+  }, [isInitialLoad, setIsInitialLoad]);
+
+  // If initial load was marked false, immediately unmount
   useEffect(() => {
     if (!isInitialLoad) {
-      setIsMounted(false);
+      setShouldRender(false);
     }
   }, [isInitialLoad]);
 
@@ -40,8 +57,13 @@ export function Preloader() {
     if (!isInitialLoad) return;
 
     if (prefersReducedMotion()) {
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(WELCOME_SESSION_KEY, "true");
+        }
+      } catch {}
       setIsInitialLoad(false);
-      setIsMounted(false);
+      setShouldRender(false);
       reveal();
       return;
     }
@@ -104,8 +126,13 @@ export function Preloader() {
       onComplete: async () => {
         // Delegate diagonal falling-curtain reveal to the reusable Curtain Transition system
         await reveal();
+        try {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(WELCOME_SESSION_KEY, "true");
+          }
+        } catch {}
         setIsInitialLoad(false);
-        setIsMounted(false);
+        setShouldRender(false);
       },
     });
 
@@ -213,7 +240,7 @@ export function Preloader() {
     { scope: containerRef },
   );
 
-  if (!isMounted) return null;
+  if (!shouldRender || !isInitialLoad) return null;
 
   return (
     <div

@@ -43,6 +43,8 @@ export function useCurtainTransition(): CurtainTransitionContextValue {
   return context;
 }
 
+export const WELCOME_SESSION_KEY = "vion_welcomed_session";
+
 export function CurtainTransitionProvider({
   children,
 }: {
@@ -61,7 +63,42 @@ export function CurtainTransitionProvider({
 
   const isTransitioningRef = useRef(false);
   const currentTimelineRef = useRef<gsap.core.Timeline | null>(null);
-  const pendingNavigationRef = useRef<(() => void) | null>(null);
+  const previousPathnameRef = useRef<string | null>(null);
+
+  // Check on client mount whether the welcome preloader has already run in this session
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const alreadyWelcomed = sessionStorage.getItem(WELCOME_SESSION_KEY) === "true";
+        if (alreadyWelcomed) {
+          setIsInitialLoad(false);
+          setPhase("idle");
+          if (overlayElement) {
+            gsap.set(overlayElement, {
+              autoAlpha: 0,
+              pointerEvents: "none",
+              clipPath: getCurtainRevealClipPath(1),
+            });
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [overlayElement]);
+
+  const handleSetIsInitialLoad = useCallback((isInitial: boolean) => {
+    setIsInitialLoad(isInitial);
+    if (!isInitial) {
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(WELCOME_SESSION_KEY, "true");
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   // Lock scroll helper
   const lockScroll = useCallback(() => {
@@ -207,6 +244,34 @@ export function CurtainTransitionProvider({
     });
   }, [overlayElement, lockScroll]);
 
+  // Automatic path-change falling slider trigger (e.g. browser back/forward or direct router navigations)
+  useEffect(() => {
+    if (previousPathnameRef.current === null) {
+      previousPathnameRef.current = pathname;
+      return;
+    }
+
+    if (previousPathnameRef.current !== pathname) {
+      previousPathnameRef.current = pathname;
+
+      // Do not interrupt the initial welcome preloader
+      if (isInitialLoad) return;
+
+      // If transition was not already handled via transitionTo(), execute the falling slider reveal
+      if (!isTransitioningRef.current) {
+        const el = overlayElement;
+        if (el && !prefersReducedMotion()) {
+          gsap.set(el, {
+            autoAlpha: 1,
+            pointerEvents: "none",
+            clipPath: getCurtainRevealClipPath(0),
+          });
+          reveal();
+        }
+      }
+    }
+  }, [pathname, isInitialLoad, overlayElement, reveal]);
+
   /**
    * Seamless route transition:
    * 1. Check if already transitioning or target is current URL.
@@ -256,7 +321,7 @@ export function CurtainTransitionProvider({
         phase,
         isTransitioning: phase !== "idle",
         isInitialLoad,
-        setIsInitialLoad,
+        setIsInitialLoad: handleSetIsInitialLoad,
         overlayElement,
         setOverlayElement,
         cover,

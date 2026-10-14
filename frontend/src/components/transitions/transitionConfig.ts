@@ -16,16 +16,16 @@ export const CURTAIN_CONFIG = {
 
   // Animation Timings (in seconds)
   timings: {
-    // Reveal (curtain falls away): ~1.05s matching reference
-    revealDuration: 1.05,
-    // Cover (curtain sweeps in): ~0.9s for responsive navigation
-    coverDuration: 0.9,
+    // Reveal (curtain falls away): ~0.85s matching reference
+    revealDuration: 0.85,
+    // Cover (curtain sweeps in): ~0.65s for responsive navigation
+    coverDuration: 0.65,
     // Text exit slide duration
-    textExitDuration: 0.45,
+    textExitDuration: 0.4,
     // Center loader group fade out
-    loaderFadeDuration: 0.28,
+    loaderFadeDuration: 0.25,
     // Minimum initial display beat for tumbling blocks rhythm
-    minPreloaderBeat: 1.1,
+    minPreloaderBeat: 0.9,
     // Maximum safety timeout for readiness to avoid trapping user
     safetyTimeout: 4.0,
   },

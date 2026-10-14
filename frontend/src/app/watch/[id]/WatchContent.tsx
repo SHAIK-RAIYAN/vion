@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import { api } from "@/lib/api";
 import type { Upload, Comment, LikeStatus } from "@/types/api";
 import { useAuth } from "@/context/AuthContext";
@@ -272,12 +273,12 @@ export function WatchContent({ id }: { id: string }) {
               : "Error Loading Video"}
           </h3>
           <p className="text-xs text-muted-foreground mb-6">{error.message}</p>
-          <Link href="/">
+          <CurtainLink href="/">
             <Button variant="secondary" size="sm" className="gap-2 text-xs">
               <ArrowLeft className="w-3.5 h-3.5" />
               Back to Feed
             </Button>
-          </Link>
+          </CurtainLink>
         </div>
       </AppShell>
     );
@@ -292,13 +293,13 @@ export function WatchContent({ id }: { id: string }) {
       <ReusableErrorBoundary>
         <div className="max-w-5xl mx-auto py-4 px-4 space-y-6">
           <div>
-            <Link
+            <CurtainLink
               href="/"
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Back to Feed
-            </Link>
+            </CurtainLink>
           </div>
 
           {/* Real Adaptive HLS Video Player */}
@@ -337,7 +338,7 @@ export function WatchContent({ id }: { id: string }) {
               {/* Channel Profile Info */}
               {video.channel && (
                 <div className="flex items-center gap-3">
-                  <Link
+                  <CurtainLink
                     href={`/channel/${video.channel.id}`}
                     className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center font-bold text-sm uppercase text-foreground shrink-0 overflow-hidden hover:opacity-90 transition-opacity"
                   >
@@ -350,14 +351,14 @@ export function WatchContent({ id }: { id: string }) {
                     ) : (
                       video.channel.channelName[0]
                     )}
-                  </Link>
+                  </CurtainLink>
                   <div>
-                    <Link
+                    <CurtainLink
                       href={`/channel/${video.channel.id}`}
                       className="font-semibold text-sm text-foreground hover:text-[var(--brand)] transition-colors block"
                     >
                       {video.channel.channelName}
-                    </Link>
+                    </CurtainLink>
                     {video.channel.handle && (
                       <p className="text-xs text-muted-foreground">
                         @{video.channel.handle}

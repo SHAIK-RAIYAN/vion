@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { CurtainLink } from "@/components/transitions";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import type { WatchHistoryItem } from "@/types/api";
@@ -155,11 +156,11 @@ function HistoryContent() {
         <p className="text-xs text-muted-foreground max-w-xs mb-4">
           Videos you watch on Vion will automatically appear here.
         </p>
-        <Link href="/">
+        <CurtainLink href="/">
           <Button size="sm" variant="secondary" className="text-xs font-semibold">
             Explore Videos
           </Button>
-        </Link>
+        </CurtainLink>
       </div>
     );
   }
@@ -213,7 +214,7 @@ function HistoryContent() {
               className="flex flex-col sm:flex-row gap-4 p-3 rounded-2xl border border-border bg-card shadow-2xs hover:border-border/80 transition-all group"
             >
               {/* Thumbnail with Link */}
-              <Link
+              <CurtainLink
                 href={`/watch/${item.uploadId}`}
                 className="relative w-full sm:w-48 aspect-video rounded-xl bg-black overflow-hidden shrink-0 block"
               >
@@ -236,26 +237,26 @@ function HistoryContent() {
                     {(item.progressTimeStamp % 60).toString().padStart(2, "0")}
                   </div>
                 )}
-              </Link>
+              </CurtainLink>
 
               {/* Video Info */}
               <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                 <div>
-                  <Link
+                  <CurtainLink
                     href={`/watch/${item.uploadId}`}
                     className="font-semibold text-sm text-foreground hover:text-[var(--brand)] transition-colors line-clamp-2"
                   >
                     {video.title}
-                  </Link>
+                  </CurtainLink>
 
                   {/* Channel Info */}
                   {video.channel && (
-                    <Link
+                    <CurtainLink
                       href={`/channel/${video.channel.id}`}
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors block mt-1"
                     >
                       {video.channel.channelName}
-                    </Link>
+                    </CurtainLink>
                   )}
 
                   <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-2">

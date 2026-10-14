@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useCurtainTransition, CurtainLink } from "@/components/transitions";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useViewMode } from "@/context/ViewModeContext";
@@ -56,6 +57,7 @@ export function Header({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, isLoading, openAuthModal, signout } = useAuth();
+  const { transitionTo } = useCurtainTransition();
   const { viewMode, setViewMode } = useViewMode();
   const { theme, setTheme } = useTheme();
   const { font, setFont } = useFont();
@@ -83,7 +85,7 @@ export function Header({
     e.preventDefault();
     const query = localSearch.trim();
     if (query) {
-      router.push(`/search?q=${encodeURIComponent(query)}`);
+      transitionTo(`/search?q=${encodeURIComponent(query)}`);
     }
   };
 
@@ -97,12 +99,12 @@ export function Header({
       openAuthModal("signin");
       return;
     }
-    router.push("/?feed=subscriptions");
+    transitionTo("/?feed=subscriptions");
   };
 
   const handleDiscoverClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    router.push("/");
+    transitionTo("/");
   };
 
   const fontOptions: { id: FontChoice; label: string }[] = [
@@ -119,7 +121,7 @@ export function Header({
             LEFT AREA: Custom VION Wordmark
             ========================================================================= */}
         <div className="flex items-center shrink-0">
-          <Link
+          <CurtainLink
             href="/"
             onClick={handleDiscoverClick}
             className="group flex items-center gap-2 cursor-pointer focus:outline-hidden"
@@ -129,7 +131,7 @@ export function Header({
               VION
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-[#ff3c00] group-hover:scale-125 transition-transform shadow-[0_0_8px_#ff3c00]" />
-          </Link>
+          </CurtainLink>
         </div>
 
         {/* =========================================================================
@@ -205,7 +207,7 @@ export function Header({
             </button>
 
             {/* Watch History */}
-            <Link
+            <CurtainLink
               href="/history"
               className={`relative px-2.5 sm:px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                 isHistoryActive
@@ -215,7 +217,7 @@ export function Header({
             >
               <History className="w-3.5 h-3.5 opacity-70" />
               <span className="hidden md:inline">History</span>
-            </Link>
+            </CurtainLink>
           </nav>
         </div>
 
@@ -410,33 +412,33 @@ export function Header({
                 <DropdownMenuSeparator className="bg-white/10" />
 
                 <DropdownMenuItem asChild>
-                  <Link
+                  <CurtainLink
                     href="/?feed=subscriptions"
                     className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
                     <Tv className="w-4 h-4 text-neutral-400" />
                     <span>Subscriptions Stream</span>
-                  </Link>
+                  </CurtainLink>
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild>
-                  <Link
+                  <CurtainLink
                     href="/history"
                     className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
                     <History className="w-4 h-4 text-neutral-400" />
                     <span>Watch History</span>
-                  </Link>
+                  </CurtainLink>
                 </DropdownMenuItem>
 
                 <DropdownMenuItem asChild>
-                  <Link
+                  <CurtainLink
                     href="/settings"
                     className="flex items-center gap-2.5 px-2 py-2 rounded-lg text-xs font-medium cursor-pointer text-neutral-300 hover:text-white"
                   >
                     <Settings className="w-4 h-4 text-neutral-400" />
                     <span>Account Settings</span>
-                  </Link>
+                  </CurtainLink>
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="bg-white/10" />
