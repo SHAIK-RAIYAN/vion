@@ -34,10 +34,11 @@ export async function reconcileUploadQueue(): Promise<number> {
   console.info("[Queue Reconciliation] Scanning database for uncompleted video uploads...");
 
   try {
-    // 1. Fetch non-deleted uploads that may be pending or interrupted
+    // 1. Fetch non-deleted uploads that may be pending or interrupted (select only essential fields)
     const pendingUploads = await Upload.where({
       isDeleted: false,
     })
+      .select("id", "channelId", "title", "processingStatus")
       .include("channel", (c) => c.select("id"))
       .all();
 

@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
@@ -269,7 +273,109 @@ export async function uploadFile(
 }
 
 /**
- * Downloads a file buffer from storage (used by worker during transcoding pipeline).
+ * Streams a local disk file directly to Supabase Storage
+ * using a readable file stream without loading the file into RAM.
+ */
+export async function uploadFileFromDisk(
+  bucket: string,
+  storagePath: string,
+  localFilePath: string,
+  options: { contentType?: string; upsert?: boolean } = {},
+): Promise<{ path: string; id?: string }> {
+  if (!fs.existsSync(localFilePath)) {
+    throw new AppError(`File not found on disk: ${localFilePath}`, 404, "FILE_NOT_FOUND");
+  }
+
+  const client = getSupabaseClient();
+  const fileStream = fs.createReadStream(localFilePath);
+
+  let { data, error } = await client.storage
+    .from(bucket)
+    .upload(storagePath, fileStream as any, {
+      contentType: options.contentType || "application/octet-stream",
+      upsert: options.upsert ?? false,
+    });
+
+  // If the bucket doesn't exist yet, attempt to initialize it and retry once
+  if (error && (error.message.includes("does not exist") || error.message.includes("not found"))) {
+    await ensureStorageBucketsExist();
+    const retryStream = fs.createReadStream(localFilePath);
+    const retry = await client.storage
+      .from(bucket)
+      .upload(storagePath, retryStream as any, {
+        contentType: options.contentType || "application/octet-stream",
+        upsert: options.upsert ?? false,
+      });
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
+    throw new AppError(
+      `Failed to upload file to storage: ${error?.message || "Upload failed"}`,
+      500,
+      "STORAGE_UPLOAD_ERROR",
+    );
+  }
+
+  return {
+    path: data.path,
+    id: data.id,
+  };
+}
+
+/**
+ * Streams a remote file directly from Supabase Storage to a local disk path
+ * without buffering the content in JavaScript heap or Node Buffer memory.
+ */
+export async function downloadFileToDisk(
+  bucket: string,
+  storagePath: string,
+  localFilePath: string,
+): Promise<void> {
+  const dir = path.dirname(localFilePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Attempt 1: Fetch through short-lived signed URL for true streaming response body
+  try {
+    const signedUrl = await createSignedDownloadUrl(bucket, storagePath, 600);
+    const response = await fetch(signedUrl);
+    if (response.ok && response.body) {
+      const writeStream = fs.createWriteStream(localFilePath);
+      const nodeReadable = Readable.fromWeb(response.body as any);
+      await pipeline(nodeReadable, writeStream);
+      return;
+    }
+  } catch {
+    // Fall back to direct client download stream if signed URL fails
+  }
+
+  // Attempt 2: Fallback to direct client download stream
+  const client = getSupabaseClient();
+  const { data, error } = await client.storage.from(bucket).download(storagePath);
+
+  if (error || !data) {
+    throw new AppError(
+      `Failed to download file from storage: ${error?.message || "Object not found"}`,
+      500,
+      "STORAGE_DOWNLOAD_ERROR",
+    );
+  }
+
+  const writeStream = fs.createWriteStream(localFilePath);
+  if (typeof (data as any).stream === "function") {
+    const nodeReadable = Readable.fromWeb((data as any).stream());
+    await pipeline(nodeReadable, writeStream);
+  } else {
+    const arrayBuffer = await data.arrayBuffer();
+    fs.writeFileSync(localFilePath, Buffer.from(arrayBuffer));
+  }
+}
+
+/**
+ * Downloads a file buffer from storage (used by legacy callers or small metadata files).
  */
 export async function downloadFile(bucket: string, path: string): Promise<Buffer> {
   const client = getSupabaseClient();

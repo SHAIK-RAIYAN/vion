@@ -4,6 +4,7 @@ import { checkRedisHealth } from "../../queue/redisClient";
 import { checkStorageHealth } from "../../services/storageService";
 import { getQueueMetrics } from "../../queue/videoQueue";
 import { getSanitizedConfigSummary } from "../../config/config";
+import { getMemorySnapshot } from "../../utils/memoryDiagnostics";
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.get("/", (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       service: "vion-backend",
       version: "1.0.0",
+      memory: getMemorySnapshot(),
       config: getSanitizedConfigSummary(),
     },
   });
@@ -127,6 +129,7 @@ router.get("/ready", async (req: Request, res: Response) => {
       status: overallHealthy ? "ready" : "degraded",
       totalLatencyMs: Date.now() - startTime,
       timestamp: new Date().toISOString(),
+      memory: getMemorySnapshot(),
       dependencies: checks,
     },
   });

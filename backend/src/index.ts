@@ -1,7 +1,12 @@
 import "temporal-polyfill/global";
 import express from "express";
-import { FRONTEND_URL, NODE_ENV, PORT } from "./config/config";
+import { FRONTEND_URL, NODE_ENV, PORT, WORKER_MODE, ENABLE_WORKER } from "./config/config";
 import { db } from "./prisma/db";
+import {
+  startPeriodicMemoryDiagnostics,
+  stopPeriodicMemoryDiagnostics,
+  logMemoryUsage,
+} from "./utils/memoryDiagnostics";
 import router from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
 import cookieParser from "cookie-parser";
@@ -155,12 +160,27 @@ export const server = app.listen(PORT, async () => {
     console.warn("[Vion Server] Storage initialization notice:", err?.message || err);
   }
 
-  // Launch dedicated worker process supervisor inside the same container
-  try {
-    const { startWorkerSupervisor } = await import("./worker/workerSupervisor");
-    startWorkerSupervisor();
-  } catch (err: any) {
-    console.warn("[Vion Server] Failed to initialize worker supervisor:", err?.message || err);
+  // Start background memory diagnostics
+  startPeriodicMemoryDiagnostics(60000);
+  logMemoryUsage("server-boot", { workerMode: WORKER_MODE });
+
+  // Launch background transcoding worker (embedded in-process for free tier or supervised process)
+  if (ENABLE_WORKER) {
+    if (WORKER_MODE === "embedded") {
+      try {
+        const { startEmbeddedWorker } = await import("./worker/embeddedWorker");
+        await startEmbeddedWorker();
+      } catch (err: any) {
+        console.warn("[Vion Server] Failed to initialize embedded worker:", err?.message || err);
+      }
+    } else {
+      try {
+        const { startWorkerSupervisor } = await import("./worker/workerSupervisor");
+        startWorkerSupervisor();
+      } catch (err: any) {
+        console.warn("[Vion Server] Failed to initialize worker supervisor:", err?.message || err);
+      }
+    }
   }
 });
 
@@ -169,14 +189,23 @@ let isShuttingDown = false;
 async function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.info(`\n[Vion Server] Received ${signal}. Closing HTTP listener gracefully...`);
+  stopPeriodicMemoryDiagnostics();
 
-  // First terminate background worker child process cleanly
-  try {
-    const { stopWorkerSupervisor } = await import("./worker/workerSupervisor");
-    await stopWorkerSupervisor();
-  } catch (err: any) {
-    console.warn("[Vion Server] Error terminating worker supervisor:", err?.message || err);
+  // Terminate background worker cleanly
+  if (WORKER_MODE === "embedded") {
+    try {
+      const { stopEmbeddedWorker } = await import("./worker/embeddedWorker");
+      await stopEmbeddedWorker();
+    } catch (err: any) {
+      console.warn("[Vion Server] Error stopping embedded worker:", err?.message || err);
+    }
+  } else {
+    try {
+      const { stopWorkerSupervisor } = await import("./worker/workerSupervisor");
+      await stopWorkerSupervisor();
+    } catch (err: any) {
+      console.warn("[Vion Server] Error terminating worker supervisor:", err?.message || err);
+    }
   }
 
   server.close(async () => {

@@ -245,8 +245,7 @@ export async function makeThumbnails(
       localVideoPath = sourceFilePath;
     } else if (sourceStorageKey) {
       localVideoPath = path.join(scratchDir, "source_input.mp4");
-      const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, sourceStorageKey);
-      fs.writeFileSync(localVideoPath, buffer);
+      await storageService.downloadFileToDisk(STORAGE_RAW_BUCKET, sourceStorageKey, localVideoPath);
       downloadedLocally = true;
     } else {
       // Look up files in the upload session folder in storage
@@ -265,8 +264,7 @@ export async function makeThumbnails(
       }
       const key = `${folder}/${rawFile.name}`;
       localVideoPath = path.join(scratchDir, "source_input.mp4");
-      const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, key);
-      fs.writeFileSync(localVideoPath, buffer);
+      await storageService.downloadFileToDisk(STORAGE_RAW_BUCKET, key, localVideoPath);
       downloadedLocally = true;
     }
 
@@ -363,8 +361,7 @@ export async function makeThumbnails(
         );
       }
 
-      const fileBuffer = fs.readFileSync(candidateLocalPath);
-      await storageService.uploadFile(STORAGE_THUMBNAILS_BUCKET, storageKey, fileBuffer, {
+      await storageService.uploadFileFromDisk(STORAGE_THUMBNAILS_BUCKET, storageKey, candidateLocalPath, {
         contentType: "image/jpeg",
         upsert: true,
       });
@@ -393,8 +390,7 @@ export async function makeThumbnails(
 
     if (isStorageConfigured() && defaultCandidate.filePath && fs.existsSync(defaultCandidate.filePath)) {
       try {
-        const defaultBuffer = fs.readFileSync(defaultCandidate.filePath);
-        await storageService.uploadFile(STORAGE_THUMBNAILS_BUCKET, defaultStorageKey, defaultBuffer, {
+        await storageService.uploadFileFromDisk(STORAGE_THUMBNAILS_BUCKET, defaultStorageKey, defaultCandidate.filePath, {
           contentType: "image/jpeg",
           upsert: true,
         });

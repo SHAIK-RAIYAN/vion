@@ -21,6 +21,8 @@ ENV FFMPEG_THREADS=1
 ENV MAX_RENDITIONS=2
 ENV WORKER_CONCURRENCY=1
 ENV FAST_TRANSCODE=true
+ENV WORKER_MODE=embedded
+ENV X264_LOW_MEM=true
 ENV TEMP_MEDIA_DIR=/app/tmp/media
 
 WORKDIR /app
@@ -40,4 +42,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:5000/api/v1/health || exit 1
 
-CMD ["bun", "src/index.ts"]
+CMD ["bun", "--smol", "src/index.ts"]

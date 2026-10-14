@@ -24,6 +24,7 @@ import {
   FFMPEG_THREADS,
   MAX_RENDITIONS,
   FAST_TRANSCODE,
+  X264_LOW_MEM,
 } from "../config/config";
 import {
   type RenditionProfile,
@@ -35,6 +36,10 @@ import * as storageService from "./storageService";
 import { spawnProcess } from "../utils/processSpawner";
 import { AppError } from "../utils/AppError";
 import { db } from "../prisma/db";
+import {
+  logMemoryUsage,
+  triggerGarbageCollection,
+} from "../utils/memoryDiagnostics";
 
 const { Upload, Video } = db.orm.public;
 
@@ -131,8 +136,7 @@ export async function resolveSourceMedia(
 
   // Case B: Explicit Supabase Storage raw object key provided
   if (sourceStorageKey) {
-    const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, sourceStorageKey);
-    fs.writeFileSync(destinationPath, buffer);
+    await storageService.downloadFileToDisk(STORAGE_RAW_BUCKET, sourceStorageKey, destinationPath);
     return { localPath: destinationPath, isTemporaryDownload: true };
   }
 
@@ -157,8 +161,7 @@ export async function resolveSourceMedia(
   }
 
   const key = `${folder}/${rawFile.name}`;
-  const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, key);
-  fs.writeFileSync(destinationPath, buffer);
+  await storageService.downloadFileToDisk(STORAGE_RAW_BUCKET, key, destinationPath);
 
   return { localPath: destinationPath, isTemporaryDownload: true };
 }
@@ -268,6 +271,10 @@ export async function encodeRenditionHls(
     "-bufsize", rendition.bufsize,
     "-vf", `scale=-2:${rendition.height}`,
     "-threads", FFMPEG_THREADS.toString(),
+    // Conservative x264 memory tuning for resource-constrained free-tier containers:
+    // Limit lookahead frames to 15 (default is 40 frames, which consumes ~124MB for 1080p uncompressed frames)
+    // Limit ref frames to 1, and disable sync-lookahead buffer replication
+    ...(X264_LOW_MEM ? ["-x264-params", "rc-lookahead=15:ref=1:sync-lookahead=0:b-adapt=0"] : []),
 
     // GOP / Keyframe Alignment for Apple HLS and consistent segmenting
     "-g",
@@ -521,15 +528,14 @@ export async function uploadHlsAssetsToStorage(
     const { rendition, segmentPaths, playlistPath, mp4Path } = item;
     const renditionPrefix = `${basePrefix}/${rendition.name}`;
 
-    // 1. Upload segment files
+    // 1. Upload segment files via disk streaming
     for (const segPath of segmentPaths) {
       const fileName = path.basename(segPath);
       const storageKey = `${renditionPrefix}/${fileName}`;
 
       if (isStorageConfigured()) {
         try {
-          const buffer = fs.readFileSync(segPath);
-          await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, storageKey, buffer, {
+          await storageService.uploadFileFromDisk(STORAGE_PROCESSED_BUCKET, storageKey, segPath, {
             contentType: "video/MP2T",
             upsert: true,
           });
@@ -557,14 +563,13 @@ export async function uploadHlsAssetsToStorage(
     });
     const playlistUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, playlistKey);
 
-    // 3. Upload progressive MP4 rendition for fast, resume-compatible download
+    // 3. Upload progressive MP4 rendition via streaming disk read
     const mp4Key = storageService.generateMp4Key(channelId, uploadId, rendition.name);
     let mp4Url = "";
 
     if (isStorageConfigured() && mp4Path && fs.existsSync(mp4Path)) {
       try {
-        const mp4Buffer = fs.readFileSync(mp4Path);
-        await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, mp4Key, mp4Buffer, {
+        await storageService.uploadFileFromDisk(STORAGE_PROCESSED_BUCKET, mp4Key, mp4Path, {
           contentType: "video/mp4",
           upsert: true,
         });
@@ -764,6 +769,8 @@ export async function processVideoHlsPipeline(
       });
 
       encodedRenditions.push(encoded);
+      triggerGarbageCollection();
+      logMemoryUsage(`rendition-${profile.name}-done`, { uploadId });
     }
 
     // 6. Stage: Generate master playlist
@@ -813,5 +820,7 @@ export async function processVideoHlsPipeline(
   } finally {
     // 11. Stage: Guaranteed cleanup of scratch files on success or failure
     cleanScratchDirectory(scratchDir);
+    triggerGarbageCollection();
+    logMemoryUsage("pipeline-scratch-cleaned", { uploadId });
   }
 }

@@ -40,6 +40,8 @@ const envSchema = z.object({
   WORKER_CONCURRENCY: z.coerce.number().default(1),
   FAST_TRANSCODE: z.coerce.boolean().default(true),
   ENABLE_WORKER: z.coerce.boolean().default(true),
+  WORKER_MODE: z.enum(["embedded", "supervisor"]).default("embedded"),
+  X264_LOW_MEM: z.coerce.boolean().default(true),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -99,6 +101,8 @@ export const MAX_RENDITIONS = Number(env.MAX_RENDITIONS) || 2;
 export const WORKER_CONCURRENCY = Number(env.WORKER_CONCURRENCY) || 1;
 export const FAST_TRANSCODE = env.FAST_TRANSCODE !== false;
 export const ENABLE_WORKER = env.ENABLE_WORKER !== false;
+export const WORKER_MODE = (env.WORKER_MODE as "embedded" | "supervisor") || "embedded";
+export const X264_LOW_MEM = env.X264_LOW_MEM !== false;
 
 // Auto-initialize temp media directory
 try {
@@ -151,11 +155,13 @@ export function getSanitizedConfigSummary() {
     },
     worker: {
       enabled: ENABLE_WORKER,
+      mode: WORKER_MODE,
       concurrency: WORKER_CONCURRENCY,
       ffmpegPreset: FFMPEG_PRESET,
       ffmpegThreads: FFMPEG_THREADS,
       maxRenditions: MAX_RENDITIONS,
       fastTranscode: FAST_TRANSCODE,
+      x264LowMem: X264_LOW_MEM,
     },
     limits: {
       maxUploadSizeBytes: MAX_UPLOAD_SIZE_BYTES,

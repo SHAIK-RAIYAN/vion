@@ -45,7 +45,7 @@ function spawnWorkerProcess(): void {
   const workerScript = path.resolve(__dirname, "index.ts");
   const execPath = process.execPath;
   const isBun = typeof (process.versions as any)?.bun !== "undefined";
-  const runArgs = isBun ? ["run", workerScript] : [workerScript];
+  const runArgs = isBun ? ["--smol", "run", workerScript] : [workerScript];
 
   console.info(`[Supervisor] Launching dedicated worker child process (${execPath} ${runArgs.join(" ")})...`);
 

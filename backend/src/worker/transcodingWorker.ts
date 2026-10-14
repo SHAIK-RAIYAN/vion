@@ -19,6 +19,13 @@ import {
 import * as storageService from "../services/storageService";
 import * as mediaService from "../services/mediaService";
 import * as transcodingService from "../services/transcodingService";
+import {
+  logMemoryUsage,
+  triggerGarbageCollection,
+  incrementActiveTranscodes,
+  decrementActiveTranscodes,
+  getActiveTranscodesCount,
+} from "../utils/memoryDiagnostics";
 
 const { Upload } = db.orm.public;
 
@@ -44,7 +51,17 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
   const attemptNum = job.attemptsMade + 1;
   const maxAttempts = job.opts.attempts || 3;
 
+  logMemoryUsage("job-start", { uploadId, jobId: job.id, attempt: attemptNum });
   console.info(`${logPrefix} Processing started for "${title || "Untitled"}" (Attempt ${attemptNum}/${maxAttempts})`);
+
+  // Concurrency guard: strictly enforce that at most 1 video-transcoding job runs at a time
+  if (getActiveTranscodesCount() >= WORKER_CONCURRENCY) {
+    throw new Error(
+      `Worker concurrency limit reached (${getActiveTranscodesCount()}/${WORKER_CONCURRENCY} active). Delaying job for serial execution.`,
+    );
+  }
+
+  incrementActiveTranscodes();
 
   try {
     // 1. Stage: Load upload record from database
@@ -73,7 +90,7 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
       processingStatus: "TRANSCODING",
     });
 
-    // 3. Stage: Verify raw object exists in storage and download once to worker workspace
+    // 3. Stage: Verify raw object exists in storage and stream directly to disk
     await job.updateProgress(15);
     const workerJobDir = path.join(TEMP_MEDIA_DIR, `worker_job_${uploadId}_${Date.now()}`);
     fs.mkdirSync(workerJobDir, { recursive: true });
@@ -88,11 +105,11 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
           throw new Error(`Raw media file is missing in storage for upload ${uploadId} under folder: ${folder}`);
         }
 
-        // Download raw video once to avoid redundant network transfers
-        console.info(`${logPrefix} Downloading raw video once to worker scratch workspace...`);
-        const buffer = await storageService.downloadFile(STORAGE_RAW_BUCKET, rawVideoKey);
+        // Stream raw video directly to disk without loading into RAM
+        console.info(`${logPrefix} Streaming raw video to worker scratch workspace...`);
         localRawPath = path.join(workerJobDir, "source_input.mp4");
-        fs.writeFileSync(localRawPath, buffer);
+        await storageService.downloadFileToDisk(STORAGE_RAW_BUCKET, rawVideoKey, localRawPath);
+        logMemoryUsage("download-complete", { uploadId });
       }
 
       // 4. Stage: Run media processing service (thumbnails & inspection)
@@ -110,6 +127,7 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
         });
         activeThumbnailUrl = thumbResult.defaultThumbnailUrl;
         console.info(`${logPrefix} Thumbnails generated successfully: ${activeThumbnailUrl}`);
+        logMemoryUsage("thumbnails-complete", { uploadId });
       } catch (thumbErr: any) {
         console.warn(`${logPrefix} Thumbnail extraction notice: ${thumbErr.message}`);
       }
@@ -133,6 +151,7 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
       console.info(
         `${logPrefix} Transcode job completed successfully. Manifest: ${transcodeResult.masterManifestUrl} (${transcodeResult.renditions.length} renditions)`,
       );
+      logMemoryUsage("job-complete", { uploadId });
 
       return {
         success: true,
@@ -164,6 +183,10 @@ export async function processTranscodeJob(job: Job<TranscodeJobData>): Promise<{
     }
 
     throw err;
+  } finally {
+    decrementActiveTranscodes();
+    triggerGarbageCollection();
+    logMemoryUsage("job-finalized", { uploadId });
   }
 }
 
