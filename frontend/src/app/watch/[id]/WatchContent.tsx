@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { CurtainLink } from "@/components/transitions";
 import { api } from "@/lib/api";
@@ -36,10 +36,34 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/navigation/AppShell";
 import ReusableErrorBoundary from "@/components/ReusableErrorBoundary";
 import { cn } from "@/lib/utils";
+import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { useGSAP } from "@gsap/react";
 
 export function WatchContent({ id }: { id: string }) {
-  const [video, setVideo] = useState<Upload | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Check if this video was passed via seamless hero transition
+  const [video, setVideo] = useState<Upload | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem(`vion_hero_video_${id}`);
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      } catch {}
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        if (sessionStorage.getItem(`vion_hero_video_${id}`)) {
+          return false;
+        }
+      } catch {}
+    }
+    return true;
+  });
+
   const [error, setError] = useState<{ message: string; statusCode: number } | null>(
     null,
   );
@@ -65,10 +89,33 @@ export function WatchContent({ id }: { id: string }) {
   const [initialProgressSeconds, setInitialProgressSeconds] = useState(0);
 
   const { user, openAuthModal } = useAuth();
+  const watchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Smooth entrance animation for surrounding items while player remains stable
+  useGSAP(
+    () => {
+      if (!video || prefersReducedMotion()) return;
+      gsap.fromTo(
+        ".watch-details-fade",
+        { opacity: 0, y: 14 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.45,
+          ease: "power2.out",
+          stagger: 0.04,
+          clearProps: "transform",
+        },
+      );
+    },
+    { dependencies: [Boolean(video)], scope: watchContainerRef },
+  );
 
   // Load initial video data and playback info
   const loadVideo = useCallback(async () => {
-    setLoading(true);
+    if (!video) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await api.videos.getById(id);
@@ -342,8 +389,8 @@ export function WatchContent({ id }: { id: string }) {
   return (
     <AppShell>
       <ReusableErrorBoundary>
-        <div className="max-w-5xl mx-auto py-4 px-4 space-y-6">
-          <div>
+        <div ref={watchContainerRef} className="max-w-5xl mx-auto py-4 px-4 space-y-6">
+          <div className="watch-details-fade">
             <CurtainLink
               href="/"
               className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -382,7 +429,7 @@ export function WatchContent({ id }: { id: string }) {
           </div>
 
           {/* Title & Metadata */}
-          <div className="space-y-4">
+          <div className="space-y-4 watch-details-fade">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
               {video.title}
             </h1>

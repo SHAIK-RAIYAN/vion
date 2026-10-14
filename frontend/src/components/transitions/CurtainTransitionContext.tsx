@@ -29,6 +29,7 @@ export interface CurtainTransitionContextValue {
   cover: () => Promise<void>;
   reveal: () => Promise<void>;
   transitionTo: (href: string, options?: { replace?: boolean }) => Promise<void>;
+  skipNextTransition: () => void;
 }
 
 const CurtainTransitionContext = createContext<CurtainTransitionContextValue | null>(null);
@@ -62,8 +63,13 @@ export function CurtainTransitionProvider({
   phaseRef.current = phase;
 
   const isTransitioningRef = useRef(false);
+  const skipNextTransitionRef = useRef(false);
   const currentTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const previousPathnameRef = useRef<string | null>(null);
+
+  const skipNextTransition = useCallback(() => {
+    skipNextTransitionRef.current = true;
+  }, []);
 
   // Check on client mount whether the welcome preloader has already run in this session
   useEffect(() => {
@@ -257,6 +263,11 @@ export function CurtainTransitionProvider({
       // Do not interrupt the initial welcome preloader
       if (isInitialLoad) return;
 
+      if (skipNextTransitionRef.current) {
+        skipNextTransitionRef.current = false;
+        return;
+      }
+
       // If transition was not already handled via transitionTo(), execute the falling slider reveal
       if (!isTransitioningRef.current) {
         const el = overlayElement;
@@ -327,6 +338,7 @@ export function CurtainTransitionProvider({
         cover,
         reveal,
         transitionTo,
+        skipNextTransition,
       }}
     >
       {children}
