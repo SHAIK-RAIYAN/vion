@@ -29,61 +29,61 @@ interface StackedVideoCardsProps {
 // =========================================================================
 function getSlotZ(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -70;
-  if (slot === 2) return -140;
-  if (slot === 3) return -210;
-  if (slot === 4) return -280;
-  if (slot === 5) return -350;
-  return -420;
+  if (slot === 1) return -105;
+  if (slot === 2) return -205;
+  if (slot === 3) return -295;
+  if (slot === 4) return -375;
+  if (slot === 5) return -445;
+  return -510;
 }
 
 function getSlotY(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -58;
-  if (slot === 2) return -112;
-  if (slot === 3) return -162;
-  if (slot === 4) return -208;
-  if (slot === 5) return -250;
-  return -288;
+  if (slot === 1) return -76;
+  if (slot === 2) return -142;
+  if (slot === 3) return -198;
+  if (slot === 4) return -246;
+  if (slot === 5) return -286;
+  return -318;
 }
 
 function getSlotScale(slot: number): number {
   if (slot <= 0) return 1;
-  if (slot === 1) return 0.94;
-  if (slot === 2) return 0.88;
-  if (slot === 3) return 0.82;
-  if (slot === 4) return 0.76;
-  if (slot === 5) return 0.7;
-  return 0.64;
+  if (slot === 1) return 0.885;
+  if (slot === 2) return 0.78;
+  if (slot === 3) return 0.685;
+  if (slot === 4) return 0.60;
+  if (slot === 5) return 0.52;
+  return 0.45;
 }
 
 function getSlotBrightness(slot: number): number {
   if (slot <= 0) return 1;
   if (slot === 1) return 0.88;
-  if (slot === 2) return 0.75;
-  if (slot === 3) return 0.62;
-  if (slot === 4) return 0.5;
-  if (slot === 5) return 0.38;
-  return 0.26;
+  if (slot === 2) return 0.76;
+  if (slot === 3) return 0.64;
+  if (slot === 4) return 0.52;
+  if (slot === 5) return 0.40;
+  return 0.28;
 }
 
 function getSlotBlur(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return 0.4;
-  if (slot === 2) return 0.8;
-  if (slot === 3) return 1.3;
-  if (slot === 4) return 1.8;
-  if (slot === 5) return 2.3;
-  return 3.0;
+  if (slot === 1) return 0;
+  if (slot === 2) return 0.4;
+  if (slot === 3) return 0.8;
+  if (slot === 4) return 1.2;
+  if (slot === 5) return 1.6;
+  return 2.0;
 }
 
 function getSlotOpacity(slot: number): number {
   if (slot < 0) return 0;
   if (slot === 0) return 1;
   if (slot === 1) return 0.98;
-  if (slot === 2) return 0.92;
-  if (slot === 3) return 0.82;
-  if (slot === 4) return 0.7;
+  if (slot === 2) return 0.94;
+  if (slot === 3) return 0.85;
+  if (slot === 4) return 0.72;
   if (slot === 5) return 0.58;
   return 0;
 }
@@ -856,29 +856,29 @@ export function StackedVideoCards({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[calc(100vh-3.5rem)] bg-[#050505] select-none overflow-hidden"
+      className="relative w-full h-[calc(100vh-3.5rem)] bg-[#f8f9fa] dark:bg-[#050505] select-none overflow-hidden transition-colors duration-300"
     >
       {/* 3D Perspective Stage Container */}
       <div
         ref={stageRef}
-        style={{ perspective: "1400px", perspectiveOrigin: "50% 36%" }}
-        className="w-full h-full flex flex-col items-center justify-center bg-[#050505] px-4 sm:px-6 relative overflow-hidden"
+        style={{ perspective: "1250px", perspectiveOrigin: "50% 32%" }}
+        className="w-full h-full flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-[#050505] px-4 sm:px-6 relative overflow-hidden transition-colors duration-300"
       >
         {/* Subtle Ambient Vignette */}
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.03)_0%,transparent_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
 
         {/* Top Plumb Line With Anchor Pin */}
         <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 decor-element">
-          <div className="w-2.5 h-2.5 rounded-full border border-white/40 flex items-center justify-center bg-black shadow-[0_0_8px_rgba(255,255,255,0.4)]">
-            <div className="w-1 h-1 rounded-full bg-white" />
+          <div className="w-2.5 h-2.5 rounded-full border border-neutral-400 dark:border-white/40 flex items-center justify-center bg-white dark:bg-black shadow-[0_0_8px_rgba(0,0,0,0.15)] dark:shadow-[0_0_8px_rgba(255,255,255,0.4)]">
+            <div className="w-1 h-1 rounded-full bg-neutral-900 dark:bg-white" />
           </div>
-          <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-white/35 to-white/10" />
+          <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
         </div>
 
         {/* Centered 3D Widescreen Cards Stack */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-[850px] aspect-[16/9.6] max-h-[56vh] sm:max-h-[60vh] flex items-center justify-center mt-6 sm:mt-8"
+          className="relative w-full max-w-[940px] lg:max-w-[1060px] xl:max-w-[1140px] aspect-[16/9.3] max-h-[60vh] sm:max-h-[65vh] flex items-center justify-center mt-10 sm:mt-14"
         >
           {videos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
@@ -914,26 +914,26 @@ export function StackedVideoCards({
                     handleFrontCardClick(video);
                   }
                 }}
-                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-white/12 bg-neutral-950 overflow-hidden shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
+                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
                   index > currentIndex
-                    ? "cursor-pointer hover:border-white/30"
+                    ? "cursor-pointer hover:border-black/25 dark:hover:border-white/30"
                     : "cursor-pointer"
                 }`}
               >
                 {/* 1. Slim Restrained Metadata Header (Upload Date | Title | Channel) */}
-                <div className="w-full h-10 sm:h-11 bg-black/90 backdrop-blur-md border-b border-white/8 px-4 sm:px-6 flex items-center justify-between gap-3 text-xs shrink-0 z-20">
+                <div className="w-full h-10 sm:h-11 bg-white/95 dark:bg-black/90 backdrop-blur-md border-b border-black/6 dark:border-white/8 px-4 sm:px-6 flex items-center justify-between gap-3 text-xs shrink-0 z-20">
                   {/* Left: Upload Date */}
-                  <div className="text-[10px] sm:text-[11px] font-mono text-neutral-400 tracking-wider uppercase shrink-0 truncate max-w-[120px] sm:max-w-none">
+                  <div className="text-[10px] sm:text-[11px] font-mono text-neutral-500 dark:text-neutral-400 tracking-wider uppercase shrink-0 truncate max-w-[120px] sm:max-w-none">
                     {dateInfo.headerDate}
                   </div>
 
                   {/* Center: Video Title */}
-                  <div className="font-semibold text-xs sm:text-sm tracking-wide text-white text-center truncate flex-1 px-2">
+                  <div className="font-semibold text-xs sm:text-sm tracking-wide text-neutral-900 dark:text-white text-center truncate flex-1 px-2">
                     {video.title}
                   </div>
 
                   {/* Right: Channel / Genre Name */}
-                  <div className="text-[10px] sm:text-[11px] font-mono text-neutral-300 tracking-wider shrink-0 truncate max-w-[130px] sm:max-w-none text-right">
+                  <div className="text-[10px] sm:text-[11px] font-mono text-neutral-700 dark:text-neutral-300 tracking-wider shrink-0 truncate max-w-[130px] sm:max-w-none text-right">
                     {channelName}
                   </div>
                 </div>
@@ -987,11 +987,11 @@ export function StackedVideoCards({
               <span>VION WALLPAPER DISCOVERY</span>
             </div>
 
-            <h2 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-white uppercase mb-2">
+            <h2 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-neutral-900 dark:text-white uppercase mb-2">
               YOU&apos;VE REACHED THE END.
             </h2>
 
-            <p className="text-xs sm:text-sm text-neutral-400 max-w-md mx-auto mb-8 leading-relaxed font-light">
+            <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-md mx-auto mb-8 leading-relaxed font-light">
               You&apos;ve seen every frame for now. Stay tuned as independent creators publish new high-definition live wallpapers.
             </p>
 
@@ -1000,7 +1000,7 @@ export function StackedVideoCards({
                 variant="outline"
                 size="sm"
                 onClick={rewindToBeginning}
-                className="rounded-full text-xs font-semibold px-6 h-9 border-white/20 bg-white/5 text-white hover:bg-white/15 gap-2 cursor-pointer"
+                className="rounded-full text-xs font-semibold px-6 h-9 border-black/15 dark:border-white/20 bg-black/5 dark:bg-white/5 text-neutral-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/15 gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Rewind to Beginning
@@ -1011,7 +1011,7 @@ export function StackedVideoCards({
                   variant="ghost"
                   size="sm"
                   onClick={() => router.push("/")}
-                  className="rounded-full text-xs text-neutral-400 hover:text-white px-4 h-9 cursor-pointer"
+                  className="rounded-full text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white px-4 h-9 cursor-pointer"
                 >
                   Explore All Wallpapers
                 </Button>
@@ -1022,7 +1022,7 @@ export function StackedVideoCards({
 
         {/* Scroll Hint */}
         {currentIndex === 0 && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[9px] font-mono tracking-widest uppercase text-neutral-400 pointer-events-none opacity-60">
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[9px] font-mono tracking-widest uppercase text-neutral-500 dark:text-neutral-400 pointer-events-none opacity-60">
             <span>Scroll or swipe</span>
             <ChevronDown className="w-3 h-3 text-[#ff3c00]" />
           </div>

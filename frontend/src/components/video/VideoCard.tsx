@@ -37,16 +37,16 @@ export function VideoCard({ video }: VideoCardProps) {
   const channelName = video.channel?.channelName || "Creator";
 
   return (
-    <div className="group flex flex-col rounded-2xl border border-white/10 bg-neutral-950 overflow-hidden shadow-lg hover:border-white/25 hover:shadow-2xl transition-all duration-300">
+    <div className="group flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950 overflow-hidden shadow-md hover:border-black/20 dark:hover:border-white/25 hover:shadow-2xl transition-all duration-300">
       {/* Slim Metadata Header Bar */}
-      <div className="h-10 bg-black/90 border-b border-white/8 px-3.5 flex items-center justify-between text-xs text-white shrink-0 gap-2">
-        <span className="text-[10px] font-mono text-neutral-400 tracking-wider uppercase shrink-0">
+      <div className="h-10 bg-neutral-100/90 dark:bg-black/90 border-b border-black/5 dark:border-white/8 px-3.5 flex items-center justify-between text-xs text-neutral-900 dark:text-white shrink-0 gap-2">
+        <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 tracking-wider uppercase shrink-0">
           {dateText}
         </span>
 
         <CurtainLink
           href={`/watch/${video.id}`}
-          className="font-bold text-xs tracking-wide text-white truncate text-center flex-1 hover:text-neutral-200 transition-colors"
+          className="font-bold text-xs tracking-wide text-neutral-900 dark:text-white truncate text-center flex-1 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors"
           title={video.title}
         >
           {video.title}
@@ -57,14 +57,14 @@ export function VideoCard({ video }: VideoCardProps) {
             <img
               src={video.channel.profilePictureUrl}
               alt={channelName}
-              className="w-4.5 h-4.5 rounded-full object-cover border border-white/10 shrink-0"
+              className="w-4.5 h-4.5 rounded-full object-cover border border-black/10 dark:border-white/10 shrink-0"
             />
           ) : (
-            <div className="w-4.5 h-4.5 rounded-full bg-neutral-800 text-white flex items-center justify-center text-[9px] font-bold uppercase shrink-0">
+            <div className="w-4.5 h-4.5 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-800 dark:text-white flex items-center justify-center text-[9px] font-bold uppercase shrink-0">
               {channelName[0] || <UserIcon className="w-2.5 h-2.5" />}
             </div>
           )}
-          <span className="text-[11px] text-neutral-300 font-medium truncate">
+          <span className="text-[11px] text-neutral-700 dark:text-neutral-300 font-medium truncate">
             {channelName}
           </span>
         </div>

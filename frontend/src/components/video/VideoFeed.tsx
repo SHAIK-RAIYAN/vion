@@ -122,21 +122,21 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   // 1. Unauthenticated Subscriptions Feed State
   if (activeFeed === "subscriptions" && !user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[500px] text-center p-8 max-w-md mx-auto my-12 border border-white/10 bg-neutral-950 rounded-3xl shadow-2xl">
+      <div className="flex flex-col items-center justify-center min-h-125 text-center p-8 max-w-md mx-auto my-12 border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950 rounded-3xl shadow-2xl">
         <div className="w-14 h-14 rounded-full bg-[#ff3c00]/10 text-[#ff3c00] flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,60,0,0.15)]">
           <Tv className="w-7 h-7" />
         </div>
-        <h3 className="text-xl font-bold tracking-tight text-white mb-2">
+        <h3 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white mb-2">
           Your Subscribed Creators
         </h3>
-        <p className="text-xs text-neutral-400 leading-relaxed mb-6">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed mb-6">
           Sign in to access live wallpapers and exclusive video previews from creators you follow.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <Button
             size="sm"
             onClick={() => openAuthModal("signin")}
-            className="flex-1 rounded-full text-xs font-semibold h-9 bg-white text-black hover:bg-neutral-200"
+            className="flex-1 rounded-full text-xs font-semibold h-9 bg-neutral-900 dark:bg-white text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200"
           >
             <User className="w-3.5 h-3.5 mr-1.5" />
             Sign In to Vion
@@ -145,7 +145,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
             size="sm"
             variant="outline"
             onClick={() => router.push("/")}
-            className="flex-1 rounded-full text-xs font-semibold h-9 border-white/10 text-neutral-300 hover:text-white hover:bg-white/5"
+            className="flex-1 rounded-full text-xs font-semibold h-9 border-black/10 dark:border-white/10 text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5"
           >
             Discover All
           </Button>
@@ -158,17 +158,17 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   if (loading) {
     return (
       <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div className="relative w-full max-w-3xl sm:max-w-4xl lg:max-w-[54rem] aspect-[16/11] sm:aspect-[16/10] max-h-[68vh] rounded-xl sm:rounded-2xl border border-white/8 bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-12 sm:mt-20 shadow-2xl">
-          <div className="w-full h-11 sm:h-12 bg-black/60 border-b border-white/5 px-6 flex items-center justify-between animate-pulse">
-            <div className="w-24 h-3 rounded bg-white/10" />
-            <div className="w-48 h-3 rounded bg-white/10" />
-            <div className="w-20 h-3 rounded bg-white/10" />
+        <div className="relative w-full max-w-3xl sm:max-w-4xl lg:max-w-[54rem] aspect-[16/11] sm:aspect-[16/10] max-h-[68vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-12 sm:mt-20 shadow-2xl backdrop-blur-md">
+          <div className="w-full h-11 sm:h-12 bg-neutral-100/80 dark:bg-black/60 border-b border-black/5 dark:border-white/5 px-6 flex items-center justify-between animate-pulse">
+            <div className="w-24 h-3 rounded bg-neutral-300 dark:bg-white/10" />
+            <div className="w-48 h-3 rounded bg-neutral-300 dark:bg-white/10" />
+            <div className="w-20 h-3 rounded bg-neutral-300 dark:bg-white/10" />
           </div>
           <div className="flex-1 flex flex-col items-center justify-center">
             <div className="mb-4">
               <BlocksLoader color="#FF3C00" />
             </div>
-            <p className="text-xs font-mono tracking-widest uppercase text-neutral-400">
+            <p className="text-xs font-mono tracking-widest uppercase text-neutral-500 dark:text-neutral-400">
               Curating Wallpapers...
             </p>
           </div>
@@ -180,21 +180,21 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   // 3. Error State
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[380px] p-8 text-center border border-white/10 bg-neutral-950 rounded-3xl max-w-lg mx-auto my-12 shadow-2xl">
-        <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center mb-4">
+      <div className="flex flex-col items-center justify-center min-h-[380px] p-8 text-center border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950 rounded-3xl max-w-lg mx-auto my-12 shadow-2xl">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mb-4">
           <AlertCircle className="w-6 h-6" />
         </div>
-        <h3 className="text-base font-bold text-white mb-1">
+        <h3 className="text-base font-bold text-neutral-900 dark:text-white mb-1">
           Feed Unavailable
         </h3>
-        <p className="text-xs text-neutral-400 mb-6 max-w-sm leading-relaxed">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-6 max-w-sm leading-relaxed">
           {error}
         </p>
         <Button
           size="sm"
           variant="outline"
           onClick={() => fetchVideos(1, false, true)}
-          className="rounded-full text-xs font-semibold px-5 h-8.5 border-white/10 text-white hover:bg-white/5 gap-2"
+          className="rounded-full text-xs font-semibold px-5 h-8.5 border-black/10 dark:border-white/10 text-neutral-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/5 gap-2"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Retry Connection
@@ -206,8 +206,8 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   // 4. Empty State
   if (filteredVideos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[420px] p-8 text-center border border-dashed border-white/10 bg-neutral-950/40 rounded-3xl max-w-md mx-auto my-12">
-        <div className="w-14 h-14 rounded-full bg-white/5 text-neutral-400 flex items-center justify-center mb-4">
+      <div className="flex flex-col items-center justify-center min-h-[420px] p-8 text-center border border-dashed border-black/10 dark:border-white/10 bg-white/60 dark:bg-neutral-950/40 rounded-3xl max-w-md mx-auto my-12">
+        <div className="w-14 h-14 rounded-full bg-black/5 dark:bg-white/5 text-neutral-500 dark:text-neutral-400 flex items-center justify-center mb-4">
           {activeFeed === "subscriptions" ? (
             <Tv className="w-7 h-7 text-[#ff3c00]" />
           ) : (
@@ -215,7 +215,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
           )}
         </div>
 
-        <h3 className="text-lg font-bold text-white mb-1.5">
+        <h3 className="text-lg font-bold text-neutral-900 dark:text-white mb-1.5">
           {searchQuery.trim()
             ? "No Matching Wallpapers"
             : activeFeed === "subscriptions"
@@ -223,7 +223,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
             : "No Wallpapers Published"}
         </h3>
 
-        <p className="text-xs text-neutral-400 max-w-xs mb-6 leading-relaxed">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-xs mb-6 leading-relaxed">
           {searchQuery.trim()
             ? `No wallpapers found matching "${searchQuery}". Try a different keyword.`
             : activeFeed === "subscriptions"
@@ -235,7 +235,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
           <Button
             size="sm"
             onClick={() => router.push("/")}
-            className="rounded-full text-xs font-semibold px-5 h-9 bg-white text-black hover:bg-neutral-200"
+            className="rounded-full text-xs font-semibold px-5 h-9 bg-neutral-900 dark:bg-white text-white dark:text-black hover:bg-neutral-800 dark:hover:bg-neutral-200"
           >
             Explore Discover Gallery
           </Button>
@@ -244,7 +244,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
             size="sm"
             variant="outline"
             onClick={() => fetchVideos(1, false, true)}
-            className="rounded-full text-xs font-semibold px-5 h-9 border-white/10 text-white hover:bg-white/5 gap-1.5"
+            className="rounded-full text-xs font-semibold px-5 h-9 border-black/10 dark:border-white/10 text-neutral-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/5 gap-1.5"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             Refresh Gallery
