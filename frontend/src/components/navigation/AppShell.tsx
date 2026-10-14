@@ -17,7 +17,7 @@ export function AppShell({
   fullBleed = false,
 }: AppShellProps) {
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white selection:bg-[#ff3c00] selection:text-white">
+    <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-[#ff3c00] selection:text-white transition-colors duration-300">
       <Header
         searchQuery={searchQuery}
         onSearchChange={onSearchChange}

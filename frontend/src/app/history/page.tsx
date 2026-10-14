@@ -170,7 +170,7 @@ function HistoryContent() {
       <div className="flex items-center justify-between pb-4 border-b border-border">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <History className="w-5 h-5 text-[var(--brand)]" />
+            <History className="w-5 h-5 text-(--brand)" />
             <span>Watch History</span>
           </h1>
           <p className="text-xs text-muted-foreground">

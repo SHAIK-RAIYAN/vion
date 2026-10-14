@@ -34,7 +34,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Vion — Independent Video Platform",
+title: "Vion — Independent Video Platform",
   description: "Original, high-performance content-focused video platform.",
 };
 
@@ -51,7 +51,7 @@ export default function RootLayout({
     >
       <body
         suppressHydrationWarning
-        className="min-h-screen bg-background text-foreground antialiased selection:bg-[var(--brand)] selection:text-white"
+        className="min-h-screen bg-background text-foreground antialiased selection:bg-(--brand) selection:text-white"
       >
         <ThemeProvider
           attribute="class"

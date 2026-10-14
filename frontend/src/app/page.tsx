@@ -17,7 +17,7 @@ export default function HomePage() {
       <ReusableErrorBoundary>
         <Suspense
           fallback={
-            <div className="w-full h-screen bg-black flex items-center justify-center text-xs font-mono text-neutral-500 uppercase tracking-widest">
+            <div className="w-full h-screen bg-background flex items-center justify-center text-xs font-mono text-muted-foreground uppercase tracking-widest">
               Loading Vion...
             </div>
           }
