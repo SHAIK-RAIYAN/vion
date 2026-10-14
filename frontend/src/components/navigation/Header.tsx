@@ -22,6 +22,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { UploadDialog } from "@/components/studio/UploadDialog";
+import { VionLogo } from "./VionLogo";
 import {
   Search,
   Sun,
@@ -40,6 +41,7 @@ import {
   Layers,
   LayoutGrid,
   Compass,
+  ChevronDown,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -62,7 +64,6 @@ export function Header({
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [searchExpanded, setSearchExpanded] = useState(false);
 
   // Sync incoming search query
   useEffect(() => {
@@ -122,13 +123,10 @@ export function Header({
           <CurtainLink
             href="/"
             onClick={handleDiscoverClick}
-            className="group flex items-center gap-2 cursor-pointer focus:outline-hidden"
+            className="group flex items-center cursor-pointer focus:outline-hidden"
             aria-label="Vion Home"
           >
-            <span className="font-black text-sm tracking-[0.32em] text-white uppercase group-hover:text-white transition-all pl-0.5">
-              VION
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#ff3c00] group-hover:scale-125 transition-transform shadow-[0_0_8px_#ff3c00]" />
+            <VionLogo />
           </CurtainLink>
         </div>
 
@@ -136,35 +134,31 @@ export function Header({
             CENTER AREA: Search Bar + Subscriptions + History Navigation
             ========================================================================= */}
         <div className="flex-1 max-w-2xl mx-auto flex items-center justify-center gap-2 sm:gap-4 min-w-0">
-          {/* Minimal Search Capsule */}
+          {/* Refined Search Capsule (Stable Width & Seamless Alignment) */}
           <form
             onSubmit={handleSearchSubmit}
-            className={`transition-all duration-300 ${
-              searchExpanded ? "flex-1 max-w-md" : "w-36 sm:w-56 md:w-64"
-            }`}
+            className="w-40 sm:w-56 md:w-64 lg:w-72 shrink min-w-0 transition-colors"
           >
             <div className="relative flex items-center w-full group">
               <Search className="w-3.5 h-3.5 absolute left-3 text-neutral-400 group-hover:text-white transition-colors pointer-events-none" />
               <input
                 type="text"
                 value={localSearch}
-                onFocus={() => setSearchExpanded(true)}
-                onBlur={() => setSearchExpanded(false)}
                 onChange={(e) => {
                   setLocalSearch(e.target.value);
                   onSearchChange?.(e.target.value);
                 }}
-                placeholder="Search wallpapers... (Ctrl+K)"
-                className="w-full h-8 pl-8 pr-12 rounded-full border border-white/8 bg-neutral-900/60 text-xs text-white placeholder:text-neutral-500 focus:outline-hidden focus:border-white/20 focus:bg-neutral-900/90 transition-all"
+                placeholder="Search wallpapers..."
+                className="w-full h-8 pl-8 pr-14 rounded-full border border-white/10 bg-neutral-900/60 text-xs text-white placeholder:text-neutral-500 focus:outline-hidden focus:border-white/25 focus:bg-neutral-900/95 focus:ring-1 focus:ring-white/15 transition-all truncate"
               />
-              <button
-                type="button"
+              <kbd
                 onClick={openCommandPalette}
-                title="Open Command Palette (Ctrl+K)"
-                className="hidden md:inline-flex items-center text-[9px] font-mono text-neutral-400 bg-white/5 border border-white/10 px-1 py-0.5 rounded absolute right-2.5 hover:text-white cursor-pointer transition-colors"
+                title="Search Wallpapers (Ctrl + K)"
+                className="hidden sm:inline-flex items-center gap-1 absolute right-2.5 top-1/2 -translate-y-1/2 h-5 px-1.5 rounded border border-white/10 bg-white/5 font-mono text-[10px] text-neutral-400 hover:text-white hover:bg-white/10 cursor-pointer select-none transition-colors"
               >
-                ⌘K
-              </button>
+                <span className="text-[9px]">Ctrl</span>
+                <span className="font-semibold text-[10px] text-neutral-300">K</span>
+              </kbd>
             </div>
           </form>
 
@@ -220,44 +214,64 @@ export function Header({
         </div>
 
         {/* =========================================================================
-            RIGHT AREA: View Mode Toggle + Upload + Settings + Account
+            RIGHT AREA: View Mode Dropdown + Upload + Settings + Account
             ========================================================================= */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Dedicated View-Mode Toggle (Stacked vs Grid) */}
-          <div
-            role="group"
-            aria-label="Wallpaper view mode"
-            className="flex items-center p-0.5 rounded-full bg-neutral-900/80 border border-white/8 shadow-inner"
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode("stacked")}
-              title="Cinematic Stacked View (Default)"
-              aria-pressed={viewMode === "stacked"}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all cursor-pointer ${
-                viewMode === "stacked"
-                  ? "bg-white text-black font-semibold shadow-xs"
-                  : "text-neutral-400 hover:text-white"
-              }`}
+          {/* Shadcn View Mode Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-300 bg-neutral-900/80 border border-white/10 hover:border-white/20 hover:text-white hover:bg-neutral-800/80 transition-all cursor-pointer shadow-xs focus:outline-hidden"
+                title="Select view layout"
+              >
+                {viewMode === "stacked" ? (
+                  <Layers className="w-3.5 h-3.5 text-neutral-300" />
+                ) : (
+                  <LayoutGrid className="w-3.5 h-3.5 text-neutral-300" />
+                )}
+                <span>View</span>
+                <ChevronDown className="w-3 h-3 text-neutral-400 ml-0.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-36 bg-neutral-950/95 border-white/10 backdrop-blur-xl p-1 text-white shadow-2xl"
             >
-              <Layers className="w-3 h-3" />
-              <span className="hidden lg:inline">Stack</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              title="Responsive Gallery Grid"
-              aria-pressed={viewMode === "grid"}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition-all cursor-pointer ${
-                viewMode === "grid"
-                  ? "bg-white text-black font-semibold shadow-xs"
-                  : "text-neutral-400 hover:text-white"
-              }`}
-            >
-              <LayoutGrid className="w-3 h-3" />
-              <span className="hidden lg:inline">Grid</span>
-            </button>
-          </div>
+              <DropdownMenuItem
+                onClick={() => setViewMode("stacked")}
+                className={`flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer ${
+                  viewMode === "stacked"
+                    ? "bg-white/10 text-white font-semibold"
+                    : "text-neutral-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Stack</span>
+                </div>
+                {viewMode === "stacked" && (
+                  <Check className="w-3.5 h-3.5 text-[#ff3c00]" />
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setViewMode("grid")}
+                className={`flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white/10 text-white font-semibold"
+                    : "text-neutral-300 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Grid</span>
+                </div>
+                {viewMode === "grid" && (
+                  <Check className="w-3.5 h-3.5 text-[#ff3c00]" />
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Creator Upload Action (Authenticated) */}
           {user ? (

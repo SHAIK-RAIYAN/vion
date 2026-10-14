@@ -11,7 +11,6 @@ import {
   Play,
   RotateCcw,
   Sparkles,
-  ExternalLink,
   ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -147,25 +146,51 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  // Derive preferred video source (MP4 progressive download or HLS stream)
+  // Derive preferred video source (strictly capped at 720p or 480p)
   const videoSource = React.useMemo(() => {
     if (video.videos && video.videos.length > 0) {
-      const preferred =
-        video.videos.find(
-          (r) => r.resolution === "720p" && r.url?.endsWith(".mp4"),
-        ) ||
-        video.videos.find((r) => r.url?.endsWith(".mp4")) ||
-        video.videos.find((r) => r.resolution === "720p") ||
-        video.videos[0];
-      if (preferred?.url) {
-        if (preferred.url.endsWith(".mp4")) {
-          return { type: "mp4" as const, url: preferred.url };
-        }
-        if (preferred.url.endsWith(".m3u8")) {
-          return { type: "hls" as const, url: preferred.url };
-        }
+      // 1. Look for 720p MP4 rendition first
+      const mp4_720 = video.videos.find(
+        (r) => r.resolution === "720p" && r.url?.endsWith(".mp4"),
+      );
+      if (mp4_720?.url) return { type: "mp4" as const, url: mp4_720.url };
+
+      // 2. Look for 480p MP4 rendition
+      const mp4_480 = video.videos.find(
+        (r) => r.resolution === "480p" && r.url?.endsWith(".mp4"),
+      );
+      if (mp4_480?.url) return { type: "mp4" as const, url: mp4_480.url };
+
+      // 3. Look for 720p or 480p HLS / other streams
+      const stream_720 = video.videos.find((r) => r.resolution === "720p");
+      if (stream_720?.url) {
+        return stream_720.url.endsWith(".m3u8")
+          ? { type: "hls" as const, url: stream_720.url }
+          : { type: "mp4" as const, url: stream_720.url };
+      }
+
+      const stream_480 = video.videos.find((r) => r.resolution === "480p");
+      if (stream_480?.url) {
+        return stream_480.url.endsWith(".m3u8")
+          ? { type: "hls" as const, url: stream_480.url }
+          : { type: "mp4" as const, url: stream_480.url };
+      }
+
+      // 4. Fallback: 360p or lower (strictly avoiding 1080p, 1440p, or 4K)
+      const nonHd = video.videos.find(
+        (r) =>
+          r.resolution !== "1080p" &&
+          r.resolution !== "1440p" &&
+          r.resolution !== "4K" &&
+          r.resolution !== "2160p",
+      );
+      if (nonHd?.url) {
+        return nonHd.url.endsWith(".m3u8")
+          ? { type: "hls" as const, url: nonHd.url }
+          : { type: "mp4" as const, url: nonHd.url };
       }
     }
+
     if (video.hlsManifestUrl) {
       return { type: "hls" as const, url: video.hlsManifestUrl };
     }
@@ -204,6 +229,19 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         hls.attachMedia(videoEl);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          // Strictly cap HLS quality level to 720p or 480p max
+          if (hls.levels && hls.levels.length > 0) {
+            const cappedLevels = hls.levels
+              .map((lvl, idx) => ({ idx, height: lvl.height }))
+              .filter((lvl) => lvl.height <= 720);
+            if (cappedLevels.length > 0) {
+              const bestLevel = cappedLevels.reduce((prev, curr) =>
+                curr.height > prev.height ? curr : prev,
+              );
+              hls.autoLevelCapping = bestLevel.idx;
+              hls.currentLevel = bestLevel.idx;
+            }
+          }
           videoEl.muted = true;
           videoEl.play().catch(() => {});
         });
@@ -315,22 +353,31 @@ export function StackedVideoCards({
   const endOfFeedRef = useRef<HTMLDivElement>(null);
 
   const [currentIndex, setCurrentIndex] = useState(0);
+  const currentIndexRef = useRef(0);
   const isAnimating = useRef(false);
   const isNavigatingToWatch = useRef(false);
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
 
+  // Keep ref synchronized with state to prevent stale closure issues during rapid scroll
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  // Reset index if the feed length updates or filters change
+  useEffect(() => {
+    if (currentIndex >= videos.length && videos.length > 0) {
+      setCurrentIndex(0);
+      currentIndexRef.current = 0;
+    }
+  }, [videos.length, currentIndex]);
+
   const setCardRef = (index: number) => (el: HTMLDivElement | null) => {
     cardsRef.current[index] = el;
   };
 
-  const activeVideo = videos[currentIndex] || null;
-  const activeDateInfo = activeVideo
-    ? parseCardDate(activeVideo.createdAt)
-    : { year: "2023", day: "14th", month: "Nov", headerDate: "July 2022" };
-
   // =========================================================================
-  // GSAP INITIAL ENTRANCE: Cascading forward from far behind in 3D space
+  // GSAP INITIAL ENTRANCE: Cascading forward from depth in 3D space
   // =========================================================================
   useGSAP(
     () => {
@@ -346,7 +393,7 @@ export function StackedVideoCards({
             scale: getSlotScale(i),
             opacity: getSlotOpacity(i),
             filter: `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
-            zIndex: (videos.length - i) * 10,
+            zIndex: Math.max(1, 50 - i),
             transformOrigin: "center top",
             force3D: true,
           });
@@ -354,7 +401,7 @@ export function StackedVideoCards({
         return;
       }
 
-      // Initial placement deep in z-space
+      // Initial placement deep in z-space with strict initial zIndex
       cardsRef.current.forEach((cardEl, i) => {
         if (!cardEl) return;
         gsap.set(cardEl, {
@@ -363,7 +410,7 @@ export function StackedVideoCards({
           scale: getSlotScale(i) * 0.82,
           opacity: 0,
           filter: `brightness(${getSlotBrightness(i) * 0.6}) blur(8px)`,
-          zIndex: (videos.length - i) * 10,
+          zIndex: Math.max(1, 50 - i),
           transformOrigin: "center top",
           force3D: true,
         });
@@ -385,7 +432,7 @@ export function StackedVideoCards({
         },
       });
 
-      // Front 7 cards cascade forward into their slots
+      // Front cards cascade forward into their slots
       tl.to(cardsRef.current.slice(0, 7), {
         z: (i) => getSlotZ(i),
         y: (i) => getSlotY(i),
@@ -393,11 +440,11 @@ export function StackedVideoCards({
         opacity: (i) => getSlotOpacity(i),
         filter: (i) =>
           `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
-        duration: 1.2,
+        duration: 1.1,
         stagger: 0.08,
       });
 
-      // Plumb line, side nodes, tick ruler, and bottom pill fade in smoothly
+      // Plumb line anchor pin fades in smoothly
       tl.fromTo(
         ".decor-element",
         { opacity: 0, y: -6 },
@@ -406,6 +453,7 @@ export function StackedVideoCards({
       );
 
       setCurrentIndex(0);
+      currentIndexRef.current = 0;
       isAnimating.current = false;
       isNavigatingToWatch.current = false;
     },
@@ -417,25 +465,38 @@ export function StackedVideoCards({
   );
 
   // =========================================================================
-  // CARD DROP & DEPTH PROGRESSION
+  // CARD DROP & DEPTH PROGRESSION (Guaranteed Front-Card Drop)
   // =========================================================================
   const dropNextCard = useCallback(() => {
+    const fromIndex = currentIndexRef.current;
     if (
       isAnimating.current ||
       isNavigatingToWatch.current ||
-      currentIndex >= videos.length
-    )
+      fromIndex >= videos.length
+    ) {
       return;
+    }
     isAnimating.current = true;
 
     const reducedMotion = prefersReducedMotion();
-    const activeCard = cardsRef.current[currentIndex];
-    const duration = reducedMotion ? 0.2 : 0.8;
+    const nextIndex = fromIndex + 1;
+    const activeCard = cardsRef.current[fromIndex];
+    const duration = reducedMotion ? 0.2 : 0.75;
+
+    // 1. Immediately elevate the active front card so it strictly stays on top while falling down
+    if (activeCard) {
+      gsap.set(activeCard, { zIndex: 60 });
+    }
 
     const tl = gsap.timeline({
       onComplete: () => {
-        const nextIndex = currentIndex + 1;
+        currentIndexRef.current = nextIndex;
         setCurrentIndex(nextIndex);
+
+        // Lower the fallen card's zIndex to 0 and disable pointer events
+        if (activeCard) {
+          gsap.set(activeCard, { zIndex: 0, pointerEvents: "none" });
+        }
 
         if (nextIndex >= videos.length - 1 && hasNextPage && onLoadMore) {
           onLoadMore();
@@ -443,11 +504,11 @@ export function StackedVideoCards({
 
         setTimeout(() => {
           isAnimating.current = false;
-        }, 60);
+        }, 80);
       },
     });
 
-    // 1. Current card falls down straight (no angle, opacity 1)
+    // 2. Front card falls down straight out of screen
     if (activeCard) {
       tl.to(
         activeCard,
@@ -464,11 +525,17 @@ export function StackedVideoCards({
       );
     }
 
-    // 2. All subsequent cards advance forward by one slot in 3D
-    for (let j = currentIndex + 1; j < videos.length; j++) {
+    // 3. All subsequent cards advance forward by one slot in 3D
+    for (let j = nextIndex; j < videos.length; j++) {
       const nextCard = cardsRef.current[j];
       if (!nextCard) continue;
-      const targetSlot = j - (currentIndex + 1);
+      const targetSlot = j - nextIndex;
+
+      // Update z-index dynamically: Slot 0 gets 50, slot 1 gets 49, etc.
+      gsap.set(nextCard, {
+        zIndex: Math.max(1, 50 - targetSlot),
+        pointerEvents: "auto",
+      });
 
       tl.to(
         nextCard,
@@ -485,8 +552,8 @@ export function StackedVideoCards({
       );
     }
 
-    // 3. Reveal End of Feed screen if last card just fell
-    if (currentIndex + 1 >= videos.length && endOfFeedRef.current) {
+    // 4. Reveal End of Feed screen if last card just fell
+    if (nextIndex >= videos.length && endOfFeedRef.current) {
       tl.to(
         endOfFeedRef.current,
         {
@@ -499,33 +566,41 @@ export function StackedVideoCards({
         0.15,
       );
     }
-  }, [currentIndex, videos.length, hasNextPage, onLoadMore]);
+  }, [videos.length, hasNextPage, onLoadMore]);
 
   // Restore previous card back into stack
   const pickPrevCard = useCallback(() => {
+    const fromIndex = currentIndexRef.current;
     if (
       isAnimating.current ||
       isNavigatingToWatch.current ||
-      currentIndex <= 0
-    )
+      fromIndex <= 0
+    ) {
       return;
+    }
     isAnimating.current = true;
 
     const reducedMotion = prefersReducedMotion();
-    const prevIndex = currentIndex - 1;
+    const prevIndex = fromIndex - 1;
     const cardToRestore = cardsRef.current[prevIndex];
     const duration = reducedMotion ? 0.2 : 0.75;
 
+    // Elevate restored card to slot 0 zIndex
+    if (cardToRestore) {
+      gsap.set(cardToRestore, { zIndex: 50, pointerEvents: "auto" });
+    }
+
     const tl = gsap.timeline({
       onComplete: () => {
+        currentIndexRef.current = prevIndex;
         setCurrentIndex(prevIndex);
         setTimeout(() => {
           isAnimating.current = false;
-        }, 60);
+        }, 80);
       },
     });
 
-    if (currentIndex === videos.length && endOfFeedRef.current) {
+    if (fromIndex >= videos.length && endOfFeedRef.current) {
       tl.to(
         endOfFeedRef.current,
         {
@@ -557,10 +632,12 @@ export function StackedVideoCards({
     }
 
     // 2. Subsequent cards push back by one slot in 3D
-    for (let j = currentIndex; j < videos.length; j++) {
+    for (let j = fromIndex; j < videos.length; j++) {
       const cardEl = cardsRef.current[j];
       if (!cardEl) continue;
       const targetSlot = j - prevIndex;
+
+      gsap.set(cardEl, { zIndex: Math.max(1, 50 - targetSlot) });
 
       tl.to(
         cardEl,
@@ -576,7 +653,7 @@ export function StackedVideoCards({
         0,
       );
     }
-  }, [currentIndex, videos.length]);
+  }, [videos.length]);
 
   // Rewind to beginning action
   const rewindToBeginning = () => {
@@ -586,6 +663,7 @@ export function StackedVideoCards({
     const tl = gsap.timeline({
       onComplete: () => {
         setCurrentIndex(0);
+        currentIndexRef.current = 0;
         isAnimating.current = false;
       },
     });
@@ -600,14 +678,19 @@ export function StackedVideoCards({
 
     cardsRef.current.forEach((cardEl, i) => {
       if (!cardEl) return;
+      const targetSlot = i;
+      gsap.set(cardEl, {
+        zIndex: Math.max(1, 50 - targetSlot),
+        pointerEvents: "auto",
+      });
       tl.to(
         cardEl,
         {
-          z: getSlotZ(i),
-          y: getSlotY(i),
-          scale: getSlotScale(i),
-          opacity: getSlotOpacity(i),
-          filter: `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
+          z: getSlotZ(targetSlot),
+          y: getSlotY(targetSlot),
+          scale: getSlotScale(targetSlot),
+          opacity: getSlotOpacity(targetSlot),
+          filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
           duration: 0.7,
           ease: "power2.inOut",
         },
@@ -636,9 +719,10 @@ export function StackedVideoCards({
         );
       } catch {}
 
-      const activeCard = cardsRef.current[currentIndex];
+      const currentIdx = currentIndexRef.current;
+      const activeCard = cardsRef.current[currentIdx];
       const otherCards = cardsRef.current.filter(
-        (_, idx) => idx !== currentIndex,
+        (_, idx) => idx !== currentIdx,
       );
 
       const tl = gsap.timeline({
@@ -673,7 +757,7 @@ export function StackedVideoCards({
         );
       }
     },
-    [currentIndex, router, skipNextTransition],
+    [router, skipNextTransition],
   );
 
   // =========================================================================
@@ -688,19 +772,20 @@ export function StackedVideoCards({
     let deltaResetTimer: NodeJS.Timeout;
 
     const handleWheel = (e: WheelEvent) => {
-      if (currentIndex >= videos.length && e.deltaY > 0) return;
+      if (isAnimating.current) return;
+      if (currentIndexRef.current >= videos.length && e.deltaY > 0) return;
       e.preventDefault();
 
       accumulatedDelta += e.deltaY;
       clearTimeout(deltaResetTimer);
       deltaResetTimer = setTimeout(() => {
         accumulatedDelta = 0;
-      }, 180);
+      }, 150);
 
-      if (accumulatedDelta > 20) {
+      if (accumulatedDelta > 35) {
         accumulatedDelta = 0;
         dropNextCard();
-      } else if (accumulatedDelta < -20) {
+      } else if (accumulatedDelta < -35) {
         accumulatedDelta = 0;
         pickPrevCard();
       }
@@ -711,7 +796,7 @@ export function StackedVideoCards({
       stage.removeEventListener("wheel", handleWheel);
       clearTimeout(deltaResetTimer);
     };
-  }, [dropNextCard, pickPrevCard, currentIndex, videos.length]);
+  }, [dropNextCard, pickPrevCard, videos.length]);
 
   // Touch gesture for mobile / tablet
   useEffect(() => {
@@ -724,6 +809,7 @@ export function StackedVideoCards({
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
+      if (isAnimating.current) return;
       const deltaY = touchStartY.current - e.changedTouches[0].clientY;
       const deltaTime = Date.now() - touchStartTime.current;
 
@@ -749,7 +835,8 @@ export function StackedVideoCards({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        e.target instanceof HTMLTextAreaElement ||
+        isAnimating.current
       ) {
         return;
       }
@@ -780,9 +867,7 @@ export function StackedVideoCards({
         {/* Subtle Ambient Vignette */}
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
 
-        {/* =========================================================================
-            DECORATION: TOP PLUMB LINE WITH ANCHOR PIN (From Screenshot)
-            ========================================================================= */}
+        {/* Top Plumb Line With Anchor Pin */}
         <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 decor-element">
           <div className="w-2.5 h-2.5 rounded-full border border-white/40 flex items-center justify-center bg-black shadow-[0_0_8px_rgba(255,255,255,0.4)]">
             <div className="w-1 h-1 rounded-full bg-white" />
@@ -790,38 +875,14 @@ export function StackedVideoCards({
           <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-white/35 to-white/10" />
         </div>
 
-        {/* =========================================================================
-            DECORATION: SIDE WIREFRAME NODES Z.IN & Z.OUT (From Screenshot)
-            ========================================================================= */}
-        <div className="hidden lg:flex absolute left-8 top-1/2 -translate-y-1/2 flex-col items-center pointer-events-none z-20 decor-element">
-          <div className="w-3 h-3 rounded-full border border-white/30 flex items-center justify-center">
-            <div className="w-1 h-1 rounded-full bg-white/70" />
-          </div>
-          <span className="mt-1.5 text-[9px] font-mono tracking-[0.25em] text-neutral-400 uppercase">
-            Z.IN
-          </span>
-        </div>
-
-        <div className="hidden lg:flex absolute right-8 top-1/2 -translate-y-1/2 flex-col items-center pointer-events-none z-20 decor-element">
-          <div className="w-3 h-3 rounded-full border border-white/30 flex items-center justify-center">
-            <div className="w-1 h-1 rounded-full bg-white/70" />
-          </div>
-          <span className="mt-1.5 text-[9px] font-mono tracking-[0.25em] text-neutral-400 uppercase">
-            Z.OUT
-          </span>
-        </div>
-
-        {/* =========================================================================
-            CENTERED 3D WIDESCREEN CARDS STACK
-            ========================================================================= */}
+        {/* Centered 3D Widescreen Cards Stack */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-[850px] aspect-[16/9.6] max-h-[50vh] sm:max-h-[53vh] flex items-center justify-center mt-10 sm:mt-14"
+          className="relative w-full max-w-[850px] aspect-[16/9.6] max-h-[56vh] sm:max-h-[60vh] flex items-center justify-center mt-6 sm:mt-8"
         >
           {videos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
             const channelName = video.channel?.channelName || "Cinema";
-            const topResolution = video.videos?.[0]?.resolution || "4K";
 
             // Enforce maximum 6 playing videos: active window is [currentIndex, currentIndex + 6)
             const isActivePlaying =
@@ -832,21 +893,28 @@ export function StackedVideoCards({
             const shouldMountVideo =
               index >= currentIndex - 1 && index <= currentIndex + 7;
 
+            const cardZIndex =
+              index < currentIndex
+                ? 0
+                : Math.max(1, 50 - (index - currentIndex));
+
             return (
               <div
                 key={video.id}
                 ref={setCardRef(index)}
-                style={{ transformStyle: "preserve-3d" }}
+                style={{
+                  zIndex: cardZIndex,
+                  transformStyle: "preserve-3d",
+                  pointerEvents: index < currentIndex ? "none" : "auto",
+                }}
                 onClick={() => {
                   if (index > currentIndex) {
-                    // Clicking a visible behind card advances directly to it
                     dropNextCard();
                   } else if (isFrontCard) {
-                    // Clicking the front card triggers the seamless hero transition
                     handleFrontCardClick(video);
                   }
                 }}
-                className={`absolute inset-0 rounded-xl sm:rounded-2xl border border-white/12 bg-neutral-950 overflow-hidden shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
+                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-white/12 bg-neutral-950 overflow-hidden shadow-[0_24px_70px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
                   index > currentIndex
                     ? "cursor-pointer hover:border-white/30"
                     : "cursor-pointer"
@@ -902,22 +970,6 @@ export function StackedVideoCards({
                       </div>
                     </div>
                   )}
-
-                  {/* Bottom Badges */}
-                  <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-white/90 pointer-events-none">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-[9px] font-mono font-bold tracking-wider text-white">
-                        {topResolution} LIVE WALLPAPER
-                      </span>
-                    </div>
-
-                    {isFrontCard && (
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-[10px] font-medium text-white group-hover:bg-[#ff3c00] group-hover:border-[#ff3c00] transition-colors">
-                        <span>Open Preview</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             );
@@ -968,81 +1020,9 @@ export function StackedVideoCards({
           </div>
         </div>
 
-        {/* =========================================================================
-            DECORATION: TICK RULER GAUGE (Under the Front Card)
-            ========================================================================= */}
-        <div className="w-full max-w-[420px] mx-auto flex items-center justify-between text-neutral-400 px-3 mt-3 sm:mt-4 select-none pointer-events-none decor-element">
-          <span className="font-mono text-xs font-bold text-neutral-400">L</span>
-          <div className="flex items-center gap-[3px] sm:gap-1.5 px-3">
-            {Array.from({ length: 27 }).map((_, i) => {
-              const activeRatio =
-                videos.length > 1
-                  ? Math.round(
-                      (currentIndex / Math.max(1, videos.length - 1)) * 26,
-                    )
-                  : 13;
-              const isCurrent = activeRatio === i;
-              const isCenter = i === 13;
-              return (
-                <div
-                  key={i}
-                  className={`transition-all duration-300 ${
-                    isCurrent
-                      ? "w-[2px] h-3.5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                      : isCenter
-                      ? "w-[1px] h-2.5 bg-white/40"
-                      : i % 2 === 0
-                      ? "w-[1px] h-1.5 bg-white/20"
-                      : "w-[1px] h-1 bg-white/10"
-                  }`}
-                />
-              );
-            })}
-          </div>
-          <span className="font-mono text-xs font-bold text-neutral-400">R</span>
-        </div>
-
-        {/* =========================================================================
-            DECORATION: BOTTOM FLOATING SIGNATURE PILL (From Screenshot)
-            ========================================================================= */}
-        {activeVideo && (
-          <div
-            onClick={() => handleFrontCardClick(activeVideo)}
-            className="w-[94%] sm:w-[88%] max-w-[850px] h-13 sm:h-14 rounded-2xl bg-[#090909]/90 backdrop-blur-xl border border-white/10 px-5 sm:px-8 flex items-center justify-between shadow-[0_12px_45px_rgba(0,0,0,0.9)] z-30 decor-element mt-3 sm:mt-3.5 mb-1 cursor-pointer hover:border-white/25 transition-colors"
-          >
-            {/* Left: Year | Date | Title */}
-            <div className="flex items-center gap-3 sm:gap-4 truncate">
-              <div className="text-xl sm:text-2xl font-black text-white tracking-tight shrink-0 font-sans">
-                {activeDateInfo.year}
-              </div>
-              <div className="h-6 w-[1px] bg-white/15 shrink-0" />
-              <div className="flex flex-col text-[10px] leading-tight font-mono shrink-0">
-                <span className="text-white font-bold">{activeDateInfo.day}</span>
-                <span className="text-neutral-400 uppercase">{activeDateInfo.month}</span>
-              </div>
-              <div className="text-xs sm:text-sm font-semibold text-neutral-200 tracking-wide truncate ml-2 sm:ml-4">
-                {activeVideo.title}
-              </div>
-            </div>
-
-            {/* Right: Abstract Tech Glyph & Creator Name */}
-            <div className="flex items-center gap-2.5 shrink-0 ml-4">
-              <svg
-                viewBox="0 0 24 16"
-                className="w-5 h-3.5 text-white/70 fill-current shrink-0"
-              >
-                <path d="M0 0h4v4H0zm6 0h4v4H6zm0 6h4v4H6zm0 6h4v4H6zm6-6h4v4h-4zm6-6h4v4h-4zm0 6h4v4h-4zm0 6h4v4h-4z" />
-              </svg>
-              <span className="text-xs sm:text-sm font-medium text-white tracking-wide truncate max-w-[130px] sm:max-w-[200px]">
-                {activeVideo.channel?.channelName || "Ali Zafar Iqbal"}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Scroll Hint */}
         {currentIndex === 0 && (
-          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[9px] font-mono tracking-widest uppercase text-neutral-400 pointer-events-none opacity-60">
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[9px] font-mono tracking-widest uppercase text-neutral-400 pointer-events-none opacity-60">
             <span>Scroll or swipe</span>
             <ChevronDown className="w-3 h-3 text-[#ff3c00]" />
           </div>
