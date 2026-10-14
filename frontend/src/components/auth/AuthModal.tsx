@@ -114,6 +114,7 @@ export function AuthModal() {
         firstName,
         lastName,
         gender,
+        dob: "2000-01-01",
       });
       setSuccessMessage("Account created! Logging you in...");
       const res: any = await api.auth.signin({ email, password });

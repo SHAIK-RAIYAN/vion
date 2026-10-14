@@ -7,9 +7,6 @@ import type { UploadVisibility } from "@/types/api";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +20,12 @@ import {
   Tv,
   Clock,
   RotateCcw,
+  Globe,
+  Link2,
+  Lock,
+  FileVideo,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -58,6 +61,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<UploadVisibility>("PUBLIC");
+  const [isDragging, setIsDragging] = useState(false);
 
   // Channel Creation State (if user has no channel yet)
   const [channelName, setChannelName] = useState("");
@@ -158,7 +162,6 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
           return;
         }
       } catch (err: any) {
-        // Log non-fatal polling notice and retry smoothly after interval
         console.warn("[UploadDialog] Status poll notice:", err?.message || err);
       }
 
@@ -187,6 +190,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     setProcessingStatus("UPLOADING");
     setErrorMessage(null);
     setStep("SELECT_FILE");
+    setIsDragging(false);
   };
 
   const handleClose = () => {
@@ -238,7 +242,6 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     }
 
     setSelectedFile(file);
-    // Auto-populate title from filename without extension
     const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
     setTitle(baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1));
     setStep("DETAILS");
@@ -301,11 +304,16 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Storage rejected upload with status ${xhr.status}: ${xhr.statusText}`));
+            reject(
+              new Error(
+                `Storage rejected upload with status ${xhr.status}: ${xhr.statusText}`,
+              ),
+            );
           }
         };
 
-        xhr.onerror = () => reject(new Error("Network failure during video transfer to storage."));
+        xhr.onerror = () =>
+          reject(new Error("Network failure during video transfer to storage."));
         xhr.onabort = () => reject(new Error("Upload cancelled by user."));
 
         xhr.send(selectedFile);
@@ -351,55 +359,81 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Video className="w-5 h-5 text-[var(--brand)]" />
-            <span>Vion Studio — Video Upload</span>
-          </DialogTitle>
-          <DialogDescription>
-            Upload high-resolution video for adaptive HLS streaming on Vion.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-xl p-0 overflow-hidden border border-black/10 dark:border-white/10 bg-white dark:bg-[#0c0c0e] shadow-2xl rounded-3xl gap-0">
+        {/* Top Accent Hairline */}
+        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#ff3c00] to-transparent opacity-90" />
+
+        {/* Clean Header */}
+        <div className="p-6 pb-4 border-b border-black/6 dark:border-white/8 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-[#ff3c00]/10 border border-[#ff3c00]/25 flex items-center justify-center text-[#ff3c00] shrink-0 shadow-[0_0_15px_rgba(255,60,0,0.15)]">
+              <Video className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold tracking-widest text-[#ff3c00] uppercase">
+                  Vion Studio
+                </span>
+                <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                  {step === "SELECT_FILE" && "Step 1/3"}
+                  {step === "DETAILS" && "Step 2/3"}
+                  {(step === "UPLOADING" || step === "PROCESSING") && "Step 3/3"}
+                  {step === "COMPLETED" && "Done"}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight mt-0.5">
+                Video Upload
+              </h2>
+            </div>
+          </div>
+        </div>
 
         {/* STEP 1: CREATE CHANNEL PROMPT */}
         {step === "CREATE_CHANNEL" && (
-          <form onSubmit={handleCreateChannel} className="space-y-4 py-2">
-            <div className="p-4 rounded-xl bg-secondary/50 border border-border flex items-start gap-3">
-              <Tv className="w-5 h-5 text-[var(--brand)] shrink-0 mt-0.5" />
+          <form onSubmit={handleCreateChannel} className="p-6 space-y-4">
+            <div className="p-4 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/60 border border-black/8 dark:border-white/10 flex items-start gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-[#ff3c00]/10 text-[#ff3c00] flex items-center justify-center shrink-0">
+                <Tv className="w-4.5 h-4.5" />
+              </div>
               <div className="text-xs space-y-1">
-                <p className="font-semibold text-foreground">Channel Setup Required</p>
-                <p className="text-muted-foreground">
-                  Before uploading videos on Vion, create your channel profile.
+                <p className="font-semibold text-neutral-900 dark:text-white">
+                  Creator Channel Setup Required
+                </p>
+                <p className="text-neutral-500 dark:text-neutral-400 leading-relaxed font-light">
+                  Before publishing live wallpapers on Vion, initialize your creator identity so viewers can follow your work.
                 </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
+              <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                 Channel Name
               </label>
               <Input
                 type="text"
-                placeholder="e.g. Pixel Pulse Tech"
+                placeholder="e.g. Lumina Motion Studio"
                 value={channelName}
                 onChange={(e) => setChannelName(e.target.value)}
+                className="rounded-xl border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 text-xs text-neutral-900 dark:text-white"
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
+              <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                 Channel Handle
               </label>
               <div className="relative flex items-center">
-                <span className="absolute left-3 text-xs text-muted-foreground">@</span>
+                <span className="absolute left-3.5 text-xs text-neutral-400 font-mono">
+                  @
+                </span>
                 <Input
                   type="text"
-                  placeholder="pixelpulse"
+                  placeholder="luminamotion"
                   value={channelHandle}
                   onChange={(e) => setChannelHandle(e.target.value)}
-                  className="pl-7 font-mono text-xs"
+                  className="pl-8 font-mono text-xs rounded-xl border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 text-neutral-900 dark:text-white"
                   required
                 />
               </div>
@@ -407,9 +441,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
             <Button
               type="submit"
-              variant="brand"
               disabled={isCreatingChannel}
-              className="w-full text-xs font-semibold h-10 mt-2"
+              className="w-full text-xs font-semibold h-10 rounded-xl bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_20px_rgba(255,60,0,0.25)] transition-all mt-3 cursor-pointer"
             >
               {isCreatingChannel ? (
                 <>
@@ -425,7 +458,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 2: SELECT FILE */}
         {step === "SELECT_FILE" && (
-          <div className="space-y-4 py-4">
+          <div className="p-6">
             <input
               ref={fileInputRef}
               type="file"
@@ -437,24 +470,54 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
             />
 
             <div
-              onDragOver={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
               onDrop={(e) => {
                 e.preventDefault();
-                if (e.dataTransfer.files?.[0]) handleFileChange(e.dataTransfer.files[0]);
+                setIsDragging(false);
+                if (e.dataTransfer.files?.[0]) {
+                  handleFileChange(e.dataTransfer.files[0]);
+                }
               }}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-border hover:border-[var(--brand)] rounded-2xl p-8 text-center cursor-pointer transition-colors bg-secondary/20 hover:bg-secondary/40 group flex flex-col items-center justify-center space-y-3"
+              className={`relative border-2 border-dashed rounded-3xl p-10 sm:p-12 text-center cursor-pointer transition-all duration-300 group flex flex-col items-center justify-center space-y-4 select-none ${
+                isDragging
+                  ? "border-[#ff3c00] bg-[#ff3c00]/8 scale-[0.99] shadow-[0_0_30px_rgba(255,60,0,0.15)]"
+                  : "border-black/12 dark:border-white/12 hover:border-[#ff3c00]/70 dark:hover:border-[#ff3c00]/70 bg-neutral-50/70 dark:bg-neutral-900/30 hover:bg-neutral-100/80 dark:hover:bg-neutral-900/60"
+              }`}
             >
-              <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
-                <UploadIcon className="w-7 h-7 text-[var(--brand)]" />
+              {/* Concentric Pedestal */}
+              <div className="relative flex items-center justify-center">
+                <div className="w-18 h-18 rounded-full bg-black/4 dark:bg-white/4 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <div className="w-14 h-14 rounded-full bg-[#ff3c00]/10 border border-[#ff3c00]/30 flex items-center justify-center text-[#ff3c00] shadow-[0_0_20px_rgba(255,60,0,0.2)] group-hover:bg-[#ff3c00] group-hover:text-white transition-colors duration-300">
+                    <UploadIcon className="w-6 h-6 group-hover:-translate-y-0.5 transition-transform duration-300" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
+
+              {/* Title & Microcopy */}
+              <div className="space-y-1.5 max-w-sm">
+                <p className="text-sm font-bold text-neutral-900 dark:text-white group-hover:text-[#ff3c00] transition-colors">
                   Click to select or drag and drop a video file
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  MP4, WebM, MOV up to 500 MB
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 font-light">
+                  Direct binary upload with adaptive HLS encoding on upload completion.
                 </p>
+              </div>
+
+              {/* Spec Pills */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+                {["MP4", "WebM", "MOV", "Max 500 MB"].map((spec) => (
+                  <span
+                    key={spec}
+                    className="px-2.5 py-1 rounded-md text-[10px] font-mono font-medium tracking-wide bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-600 dark:text-neutral-400"
+                  >
+                    {spec}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -462,81 +525,143 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 3: DETAILS */}
         {step === "DETAILS" && (
-          <div className="space-y-4 py-2">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border text-xs">
-              <div className="flex items-center gap-2 truncate">
-                <Video className="w-4 h-4 text-[var(--brand)] shrink-0" />
-                <span className="font-semibold text-foreground truncate">
-                  {selectedFile?.name}
-                </span>
-                <span className="text-muted-foreground shrink-0">
-                  ({((selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB)
-                </span>
+          <div className="p-6 space-y-4">
+            {/* Selected File Card */}
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/70 border border-black/8 dark:border-white/10 text-xs">
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="w-9 h-9 rounded-xl bg-[#ff3c00]/10 border border-[#ff3c00]/20 flex items-center justify-center text-[#ff3c00] shrink-0">
+                  <FileVideo className="w-4.5 h-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-neutral-900 dark:text-white truncate">
+                    {selectedFile?.name}
+                  </p>
+                  <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+                    {((selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB • Ready to transfer
+                  </p>
+                </div>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setStep("SELECT_FILE")}
-                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                className="h-8 rounded-full text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer shrink-0"
               >
                 Change
               </Button>
             </div>
 
+            {/* Title Field */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Title <span className="text-destructive">*</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                  Video Title <span className="text-[#ff3c00]">*</span>
+                </label>
+                <span className="text-[10px] font-mono text-neutral-400">
+                  {title.length}/100
+                </span>
+              </div>
               <Input
                 type="text"
-                placeholder="Give your video a title"
+                placeholder="e.g. Celestial Orbit — 4K 60fps"
                 value={title}
+                maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
+                className="rounded-xl border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 text-xs text-neutral-900 dark:text-white focus:border-[#ff3c00] focus:ring-[#ff3c00]/20"
                 required
               />
             </div>
 
+            {/* Description Field */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
+              <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                 Description (Optional)
               </label>
               <textarea
-                rows={3}
-                placeholder="Tell viewers what your video is about..."
+                rows={2}
+                placeholder="Provide notes on the wallpaper's resolution, visual aesthetics, or creation process..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-xl border border-input bg-card px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 px-3.5 py-2.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-hidden focus:border-[#ff3c00] focus:ring-1 focus:ring-[#ff3c00]/20 resize-none"
               />
             </div>
 
+            {/* Visibility Selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Visibility
+              <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                Visibility Setting
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {(["PUBLIC", "UNLISTED", "PRIVATE"] as UploadVisibility[]).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setVisibility(v)}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-                      visibility === v
-                        ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)]"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
+                {[
+                  {
+                    id: "PUBLIC" as UploadVisibility,
+                    label: "Public",
+                    desc: "Visible in Discover",
+                    icon: Globe,
+                  },
+                  {
+                    id: "UNLISTED" as UploadVisibility,
+                    label: "Unlisted",
+                    desc: "Direct link only",
+                    icon: Link2,
+                  },
+                  {
+                    id: "PRIVATE" as UploadVisibility,
+                    label: "Private",
+                    desc: "Only you can see",
+                    icon: Lock,
+                  },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isSelected = visibility === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setVisibility(item.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? "border-[#ff3c00] bg-[#ff3c00]/10 text-neutral-900 dark:text-white shadow-[0_0_15px_rgba(255,60,0,0.12)] ring-1 ring-[#ff3c00]/30"
+                          : "border-black/10 dark:border-white/10 bg-neutral-50/80 dark:bg-neutral-900/40 text-neutral-600 dark:text-neutral-400 hover:border-black/20 dark:hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <Icon
+                          className={`w-3.5 h-3.5 ${
+                            isSelected ? "text-[#ff3c00]" : "text-neutral-400"
+                          }`}
+                        />
+                        {isSelected && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#ff3c00]" />
+                        )}
+                      </div>
+                      <span className="text-xs font-bold block">{item.label}</span>
+                      <span className="text-[10px] text-neutral-500 dark:text-neutral-400 block mt-0.5 font-light">
+                        {item.desc}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={handleClose}>
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-black/6 dark:border-white/8">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="rounded-full text-xs font-semibold px-4 h-9 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+              >
                 Cancel
               </Button>
-              <Button variant="brand" size="sm" onClick={handleStartUpload}>
-                Start Upload
+              <Button
+                size="sm"
+                onClick={handleStartUpload}
+                className="rounded-full text-xs font-semibold px-6 h-9 bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_20px_rgba(255,60,0,0.3)] transition-all active:scale-95 cursor-pointer gap-1.5"
+              >
+                <span>Start Upload</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>
@@ -544,103 +669,139 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 4: UPLOADING */}
         {step === "UPLOADING" && (
-          <div className="space-y-5 py-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] flex items-center justify-center mx-auto animate-pulse">
-              <UploadIcon className="w-7 h-7" />
+          <div className="p-8 py-10 space-y-6 text-center">
+            {/* Glowing Beacon */}
+            <div className="relative flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center animate-pulse">
+                <div className="w-14 h-14 rounded-full bg-[#ff3c00]/20 border border-[#ff3c00]/40 flex items-center justify-center text-[#ff3c00] shadow-[0_0_25px_rgba(255,60,0,0.3)]">
+                  <UploadIcon className="w-6 h-6 animate-bounce" />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
-                Uploading to Storage... {uploadPercent}%
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-neutral-900 dark:text-white">
+                  {uploadPercent}%
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                Direct Storage Transfer Active
               </p>
-              <p className="text-xs text-muted-foreground font-mono">
+              <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
                 {((uploadedBytes / (1024 * 1024)).toFixed(1))} MB of{" "}
                 {((totalBytes / (1024 * 1024)).toFixed(1))} MB
               </p>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full h-2.5 rounded-full bg-secondary overflow-hidden">
+            {/* Glowing Progress Track */}
+            <div className="w-full max-w-md mx-auto h-2 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden relative">
               <div
-                className="h-full bg-[var(--brand)] transition-all duration-150 ease-out"
+                className="h-full bg-gradient-to-r from-[#ff6b3d] to-[#ff3c00] transition-all duration-150 ease-out shadow-[0_0_12px_rgba(255,60,0,0.5)]"
                 style={{ width: `${uploadPercent}%` }}
               />
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClose}
-              className="text-xs text-destructive border-destructive/20 hover:bg-destructive/10"
-            >
-              Cancel Transfer
-            </Button>
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClose}
+                className="rounded-full text-xs text-red-500 border-red-500/20 hover:bg-red-500/10 cursor-pointer h-8 px-4"
+              >
+                Cancel Transfer
+              </Button>
+            </div>
           </div>
         )}
 
         {/* STEP 5: PROCESSING */}
         {step === "PROCESSING" && (
-          <div className="space-y-5 py-6 text-center">
+          <div className="p-8 py-10 space-y-6 text-center">
             {processingStatus === "TRANSCODING" || queueState?.state === "active" ? (
               <>
-                <div className="w-14 h-14 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] flex items-center justify-center mx-auto">
-                  <Loader2 className="w-7 h-7 animate-spin" />
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-foreground">
-                    Video Processing in Progress
-                  </p>
-                  <div className="flex items-center justify-center gap-1.5 py-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[var(--brand)]/10 text-[var(--brand)] border border-[var(--brand)]/20">
-                      TRANSCODING
-                    </span>
-                    {typeof queueState?.progress === "number" && queueState.progress > 0 && (
-                      <span className="text-xs font-mono font-bold text-foreground">
-                        {queueState.progress}%
-                      </span>
-                    )}
+                <div className="relative flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-full bg-[#ff3c00]/20 border border-[#ff3c00]/40 flex items-center justify-center text-[#ff3c00] shadow-[0_0_25px_rgba(255,60,0,0.3)]">
+                      <Loader2 className="w-7 h-7 animate-spin" />
+                    </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-2 max-w-sm mx-auto">
-                    Transcoding worker is generating adaptive HLS renditions (1080p, 720p, 480p, 360p) and video thumbnails in the background. You may close this window or wait.
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-[#ff3c00]/10 text-[#ff3c00] border border-[#ff3c00]/20">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>ADAPTIVE HLS ENCODING</span>
+                  </div>
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white pt-1">
+                    Generating Adaptive Streams
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
+                    Worker is encoding 1080p, 720p, 480p, and 360p renditions with master playlists for fluid live playback.
                   </p>
                 </div>
 
+                {/* Progress bar if numerical */}
                 {typeof queueState?.progress === "number" && queueState.progress > 0 && (
-                  <div className="w-full max-w-xs mx-auto h-2 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full bg-[var(--brand)] transition-all duration-300"
-                      style={{ width: `${queueState.progress}%` }}
-                    />
+                  <div className="w-full max-w-xs mx-auto space-y-1">
+                    <div className="flex justify-between text-[10px] font-mono text-neutral-400">
+                      <span>Transcoding</span>
+                      <span>{queueState.progress}%</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                      <div
+                        className="h-full bg-[#ff3c00] transition-all duration-300"
+                        style={{ width: `${queueState.progress}%` }}
+                      />
+                    </div>
                   </div>
                 )}
               </>
             ) : (
               <>
-                <div className="w-14 h-14 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto animate-pulse">
-                  <Clock className="w-7 h-7" />
+                <div className="relative flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center animate-pulse">
+                    <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.2)]">
+                      <Clock className="w-6 h-6" />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-foreground">
-                    Upload Complete — Waiting in Queue
-                  </p>
-                  <div className="flex items-center justify-center gap-1.5 py-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                      QUEUED (WAITING FOR WORKER)
-                    </span>
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>QUEUED IN REDIS</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-2 max-w-sm mx-auto">
-                    Your video file transfer to storage is complete. The job is queued in Redis and waiting for an active transcoding worker to begin encoding.
+                  <h3 className="text-base font-bold text-neutral-900 dark:text-white pt-1">
+                    Upload Complete — Waiting for Worker
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
+                    Your video file is safely deposited in storage. A background transcoding worker will automatically pick up the job.
                   </p>
                 </div>
               </>
             )}
 
+            {/* Rendition Preview Pills */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              {["1080p Full HD", "720p HD", "480p SD", "Thumbnails"].map((r) => (
+                <span
+                  key={r}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-600 dark:text-neutral-400"
+                >
+                  {r}
+                </span>
+              ))}
+            </div>
+
             {uploadId && (
               <div className="pt-2">
                 <Link href={`/watch/${uploadId}`} onClick={onClose}>
-                  <Button variant="secondary" size="sm" className="text-xs gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-xs font-semibold px-5 h-8.5 border-black/10 dark:border-white/15 bg-neutral-100 dark:bg-neutral-900 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800 gap-1.5 cursor-pointer"
+                  >
                     <Play className="w-3.5 h-3.5" />
                     Preview Video Page
                   </Button>
@@ -652,27 +813,39 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 6: COMPLETED */}
         {step === "COMPLETED" && (
-          <div className="space-y-5 py-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-7 h-7" />
+          <div className="p-8 py-10 space-y-6 text-center">
+            <div className="relative flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.3)]">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-bold text-neutral-900 dark:text-white">
                 Video Ready For Streaming!
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Transcoding completed successfully and master HLS playlist generated.
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
+                Transcoding completed successfully. Multi-bitrate HLS adaptive manifest is now generated and active.
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={resetForm}>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetForm}
+                className="rounded-full text-xs font-semibold px-5 h-9 border-black/10 dark:border-white/15 text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+              >
                 Upload Another
               </Button>
               {uploadId && (
                 <Link href={`/watch/${uploadId}`} onClick={onClose}>
-                  <Button variant="brand" size="sm" className="gap-1.5">
+                  <Button
+                    size="sm"
+                    className="rounded-full text-xs font-semibold px-6 h-9 bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_20px_rgba(255,60,0,0.3)] gap-1.5 cursor-pointer"
+                  >
                     <Play className="w-3.5 h-3.5" />
                     Watch Video
                   </Button>
@@ -684,20 +857,31 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 7: ERROR */}
         {step === "ERROR" && (
-          <div className="space-y-5 py-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
-              <AlertCircle className="w-7 h-7" />
+          <div className="p-8 py-10 space-y-6 text-center">
+            <div className="relative flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-500 shadow-[0_0_25px_rgba(239,68,68,0.25)]">
+                  <AlertCircle className="w-7 h-7" />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-foreground">Upload & Processing Notice</p>
-              <p className="text-xs text-destructive max-w-sm mx-auto">
-                {errorMessage || "An unexpected error occurred."}
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+                Upload & Processing Notice
+              </h3>
+              <p className="text-xs text-red-500 max-w-sm mx-auto leading-relaxed">
+                {errorMessage || "An unexpected error occurred during processing."}
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <Button variant="ghost" size="sm" onClick={handleClose}>
+            <div className="flex items-center justify-center gap-2.5 pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="rounded-full text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+              >
                 Dismiss
               </Button>
               {uploadId && (
@@ -705,14 +889,18 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                   variant="outline"
                   size="sm"
                   onClick={handleRetryProcessing}
-                  className="gap-1.5 text-xs"
+                  className="rounded-full text-xs font-semibold px-4 h-8.5 border-black/10 dark:border-white/15 gap-1.5 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Retry Processing
                 </Button>
               )}
-              <Button variant="brand" size="sm" onClick={() => setStep("SELECT_FILE")}>
-                Upload Another File
+              <Button
+                size="sm"
+                onClick={() => setStep("SELECT_FILE")}
+                className="rounded-full text-xs font-semibold px-5 h-8.5 bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_15px_rgba(255,60,0,0.25)] cursor-pointer"
+              >
+                Select Another File
               </Button>
             </div>
           </div>
