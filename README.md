@@ -1,6 +1,6 @@
-# 🎬 Vion — Full-Stack Video Sharing & Adaptive Streaming Platform
+# 🎬 Vion — Full-Stack Video Sharing Platform
 
-Welcome to **Vion** — an open-source, production-grade video-sharing and adaptive streaming platform built from the ground up with modern full-stack web technologies.
+Welcome to **Vion** — an open-source, production-grade video-sharing platform built from the ground up with modern full-stack web technologies.
 
 Vion delivers a YouTube-like experience featuring direct-to-cloud uploads, distributed video transcoding with FFmpeg, adaptive bitrate streaming (HLS), channel management, subscriptions, watch history, real-time reactions, comments, and responsive UI micro-interactions.
 
