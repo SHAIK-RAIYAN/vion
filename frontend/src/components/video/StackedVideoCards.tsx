@@ -320,11 +320,8 @@ export function StackedVideoCards({
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
 
-  cardsRef.current = [];
-  const addToCardsRef = (el: HTMLDivElement | null) => {
-    if (el && !cardsRef.current.includes(el)) {
-      cardsRef.current.push(el);
-    }
+  const setCardRef = (index: number) => (el: HTMLDivElement | null) => {
+    cardsRef.current[index] = el;
   };
 
   const activeVideo = videos[currentIndex] || null;
@@ -838,7 +835,7 @@ export function StackedVideoCards({
             return (
               <div
                 key={video.id}
-                ref={addToCardsRef}
+                ref={setCardRef(index)}
                 style={{ transformStyle: "preserve-3d" }}
                 onClick={() => {
                   if (index > currentIndex) {

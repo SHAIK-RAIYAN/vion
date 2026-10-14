@@ -1,7 +1,11 @@
 import { db } from "../../prisma/db";
 import { AppError } from "../../utils/AppError";
 import * as storageService from "../../services/storageService";
-import { STORAGE_PROCESSED_BUCKET, isStorageConfigured } from "../../config/config";
+import {
+  STORAGE_PROCESSED_BUCKET,
+  STORAGE_THUMBNAILS_BUCKET,
+  isStorageConfigured,
+} from "../../config/config";
 import {
   publishVideoSchema,
   updateVideoSchema,
@@ -10,7 +14,7 @@ import {
 } from "./video.schema";
 import * as interactionService from "../interaction/interaction.service";
 
-const { Upload, Channel, Video } = db.orm.public;
+const { Upload, Channel } = db.orm.public;
 
 // In-memory sliding view cooldown cache: `${clientIdentifier}:${videoId}` -> timestamp
 const viewCooldownMap = new Map<string, number>();
@@ -270,9 +274,6 @@ export async function unlikeVideo(videoId: string, userId: string) {
 export async function getVideoLikeStatus(videoId: string, userId?: string) {
   return await interactionService.getInteractionCounts(videoId, userId);
 }
-
-import * as storageService from "../../services/storageService";
-import { isStorageConfigured, STORAGE_THUMBNAILS_BUCKET } from "../../config/config";
 
 export async function getThumbnailPresignedUrl(
   videoId: string,

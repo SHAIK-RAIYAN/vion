@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useRef } from "react";
-import Link from "next/link";
 import { CurtainLink } from "@/components/transitions";
 import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
-import { Play, User as UserIcon, ExternalLink } from "lucide-react";
+import { Play, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface GalleryGridProps {

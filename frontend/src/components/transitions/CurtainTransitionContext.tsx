@@ -59,9 +59,6 @@ export function CurtainTransitionProvider({
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
 
-  const phaseRef = useRef<TransitionPhase>("covered");
-  phaseRef.current = phase;
-
   const isTransitioningRef = useRef(false);
   const skipNextTransitionRef = useRef(false);
   const currentTimelineRef = useRef<gsap.core.Timeline | null>(null);

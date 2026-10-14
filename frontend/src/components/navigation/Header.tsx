@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { useCurtainTransition, CurtainLink } from "@/components/transitions";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useViewMode } from "@/context/ViewModeContext";
 import { useTheme } from "next-themes";
@@ -53,7 +52,6 @@ export function Header({
   searchQuery = "",
   onSearchChange,
 }: HeaderProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, isLoading, openAuthModal, signout } = useAuth();
@@ -360,13 +358,13 @@ export function Header({
 
               {/* Account Settings Link */}
               <div className="pt-2 border-t border-white/10">
-                <Link
+                <CurtainLink
                   href="/settings"
                   className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:bg-neutral-900 hover:text-white transition-colors cursor-pointer group"
                 >
                   <span>More account settings</span>
                   <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                </Link>
+                </CurtainLink>
               </div>
             </PopoverContent>
           </Popover>

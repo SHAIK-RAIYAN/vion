@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
 import { CurtainLink } from "@/components/transitions";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";

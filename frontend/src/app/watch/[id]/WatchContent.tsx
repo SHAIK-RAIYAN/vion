@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import Link from "next/link";
 import { CurtainLink } from "@/components/transitions";
 import { api } from "@/lib/api";
 import type { Upload, Comment, LikeStatus } from "@/types/api";
@@ -90,6 +89,7 @@ export function WatchContent({ id }: { id: string }) {
 
   const { user, openAuthModal } = useAuth();
   const watchContainerRef = useRef<HTMLDivElement>(null);
+  const hasInitialVideo = useRef(Boolean(video));
 
   // Smooth entrance animation for surrounding items while player remains stable
   useGSAP(
@@ -113,7 +113,7 @@ export function WatchContent({ id }: { id: string }) {
 
   // Load initial video data and playback info
   const loadVideo = useCallback(async () => {
-    if (!video) {
+    if (!hasInitialVideo.current) {
       setLoading(true);
     }
     setError(null);

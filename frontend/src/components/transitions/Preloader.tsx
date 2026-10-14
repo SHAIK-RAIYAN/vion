@@ -1,7 +1,7 @@
 "use client";
 
 import { gsap, prefersReducedMotion, useGSAP } from "@/lib/gsap";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useCurtainTransition, WELCOME_SESSION_KEY } from "./CurtainTransitionContext";
 import { CURTAIN_CONFIG } from "./transitionConfig";
 
@@ -51,6 +51,65 @@ export function Preloader() {
       setShouldRender(false);
     }
   }, [isInitialLoad]);
+
+  // Trigger choreographed exit sequence
+  const triggerExitSequence = useCallback(() => {
+    if (isRevealingRef.current) return;
+    isRevealingRef.current = true;
+
+    // Stop looping timeline
+    loopTlRef.current?.pause();
+
+    const exitTl = gsap.timeline({
+      onComplete: async () => {
+        // Delegate diagonal falling-curtain reveal to the reusable Curtain Transition system
+        await reveal();
+        try {
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(WELCOME_SESSION_KEY, "true");
+          }
+        } catch {}
+        setIsInitialLoad(false);
+        setShouldRender(false);
+      },
+    });
+
+    // 1. Animate welcome text vertically outside its clipped container
+    if (textRef.current) {
+      exitTl.to(textRef.current, {
+        yPercent: -120,
+        duration: CURTAIN_CONFIG.timings.textExitDuration,
+        ease: CURTAIN_CONFIG.easings.textExit,
+      });
+    }
+
+    // 2. Fade center blocks group
+    if (centerGroupRef.current) {
+      exitTl.to(
+        centerGroupRef.current,
+        {
+          opacity: 0,
+          scale: 0.94,
+          duration: CURTAIN_CONFIG.timings.loaderFadeDuration,
+          ease: CURTAIN_CONFIG.easings.loaderFade,
+        },
+        ">-0.15",
+      );
+    }
+
+    // 3. Fade preloader container background so underlying curtain overlay performs the diagonal wipe
+    if (containerRef.current) {
+      exitTl.to(
+        containerRef.current,
+        {
+          opacity: 0,
+          duration: 0.15,
+          ease: "power2.out",
+        },
+        ">-0.05",
+      );
+    }
+  }, [reveal, setIsInitialLoad]);
 
   // Set up genuine application readiness detection
   useEffect(() => {
@@ -112,66 +171,7 @@ export function Preloader() {
     return () => {
       isCancelled = true;
     };
-  }, [isInitialLoad, reveal, setIsInitialLoad]);
-
-  // Trigger choreographed exit sequence
-  const triggerExitSequence = () => {
-    if (isRevealingRef.current) return;
-    isRevealingRef.current = true;
-
-    // Stop looping timeline
-    loopTlRef.current?.pause();
-
-    const exitTl = gsap.timeline({
-      onComplete: async () => {
-        // Delegate diagonal falling-curtain reveal to the reusable Curtain Transition system
-        await reveal();
-        try {
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem(WELCOME_SESSION_KEY, "true");
-          }
-        } catch {}
-        setIsInitialLoad(false);
-        setShouldRender(false);
-      },
-    });
-
-    // 1. Animate welcome text vertically outside its clipped container
-    if (textRef.current) {
-      exitTl.to(textRef.current, {
-        yPercent: -120,
-        duration: CURTAIN_CONFIG.timings.textExitDuration,
-        ease: CURTAIN_CONFIG.easings.textExit,
-      });
-    }
-
-    // 2. Fade center blocks group
-    if (centerGroupRef.current) {
-      exitTl.to(
-        centerGroupRef.current,
-        {
-          opacity: 0,
-          scale: 0.94,
-          duration: CURTAIN_CONFIG.timings.loaderFadeDuration,
-          ease: CURTAIN_CONFIG.easings.loaderFade,
-        },
-        ">-0.15",
-      );
-    }
-
-    // 3. Fade preloader container background so underlying curtain overlay performs the diagonal wipe
-    if (containerRef.current) {
-      exitTl.to(
-        containerRef.current,
-        {
-          opacity: 0,
-          duration: 0.15,
-          ease: "power2.out",
-        },
-        ">-0.05",
-      );
-    }
-  };
+  }, [isInitialLoad, reveal, setIsInitialLoad, triggerExitSequence]);
 
   // Setup GSAP tumbling blocks animation loop
   useGSAP(

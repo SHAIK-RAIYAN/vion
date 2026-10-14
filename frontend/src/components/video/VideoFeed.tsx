@@ -15,9 +15,6 @@ import {
   RefreshCw,
   Search,
   Tv,
-  Layers,
-  LayoutGrid,
-  Sparkles,
   User,
 } from "lucide-react";
 import { useGSAP } from "@gsap/react";
@@ -68,10 +65,11 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
           setVideos(res.items);
         }
         setPagination(res.pagination);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setError(
-          err.message ||
-            "Could not load wallpapers. Ensure the backend server is running.",
+          err instanceof Error
+            ? err.message
+            : "Could not load wallpapers. Ensure the backend server is running.",
         );
       } finally {
         setLoading(false);

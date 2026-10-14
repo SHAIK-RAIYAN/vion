@@ -16,11 +16,8 @@ export function BlocksLoader({
   const containerRef = useRef<HTMLDivElement>(null);
   const blockRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  blockRefs.current = [];
-  const addToBlockRefs = (el: HTMLDivElement | null) => {
-    if (el && !blockRefs.current.includes(el)) {
-      blockRefs.current.push(el);
-    }
+  const setBlockRef = (index: number) => (el: HTMLDivElement | null) => {
+    blockRefs.current[index] = el;
   };
 
   useGSAP(
@@ -106,7 +103,7 @@ export function BlocksLoader({
       {[0, 1, 2, 3].map((index) => (
         <div
           key={index}
-          ref={addToBlockRefs}
+          ref={setBlockRef(index)}
           className="absolute shadow-[0_0_8px_rgba(255,60,0,0.35)]"
           style={{
             width: 12,
