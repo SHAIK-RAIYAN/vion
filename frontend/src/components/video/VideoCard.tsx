@@ -73,7 +73,7 @@ export function VideoCard({ video }: VideoCardProps) {
       {/* Cinematic Preview */}
       <CurtainLink
         href={`/watch/${video.id}`}
-        className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block"
+        className="relative aspect-[4/3] w-full bg-black overflow-hidden group/media cursor-pointer block"
       >
         {video.thumbnailUrl ? (
           <img

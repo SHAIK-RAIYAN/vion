@@ -4,7 +4,7 @@ export function VideoCardSkeleton() {
   return (
     <div className="flex flex-col gap-3 animate-pulse">
       {/* Thumbnail Skeleton */}
-      <div className="w-full aspect-video rounded-xl bg-muted/60" />
+      <div className="w-full aspect-[4/3] rounded-xl bg-muted/60" />
 
       {/* Details Skeleton */}
       <div className="flex gap-3">
