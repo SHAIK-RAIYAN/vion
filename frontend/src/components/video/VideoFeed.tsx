@@ -165,7 +165,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   if (loading) {
     return (
       <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div className="relative w-full max-w-[560px] sm:max-w-[620px] md:max-w-[680px] lg:max-w-[720px] aspect-[4/3] max-h-[52vh] sm:max-h-[55vh] md:max-h-[58vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-6 sm:mt-8 shadow-2xl backdrop-blur-md">
+        <div className="relative w-full max-w-[580px] sm:max-w-[640px] md:max-w-[700px] lg:max-w-[740px] aspect-[4/3] max-h-[54vh] sm:max-h-[58vh] md:max-h-[60vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-6 sm:mt-8 shadow-2xl backdrop-blur-md">
           <div className="w-full h-11 sm:h-12 bg-neutral-100/80 dark:bg-black/60 border-b border-black/5 dark:border-white/5 px-6 flex items-center justify-between animate-pulse">
             <div className="w-24 h-3 rounded bg-neutral-300 dark:bg-white/10" />
             <div className="w-48 h-3 rounded bg-neutral-300 dark:bg-white/10" />

@@ -38,12 +38,12 @@ function getSlotZ(slot: number): number {
 
 function getSlotY(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -54;
-  if (slot === 2) return -102;
-  if (slot === 3) return -144;
-  if (slot === 4) return -180;
-  if (slot === 5) return -210;
-  return -234;
+  if (slot === 1) return -60;
+  if (slot === 2) return -113;
+  if (slot === 3) return -158;
+  if (slot === 4) return -196;
+  if (slot === 5) return -227;
+  return -252;
 }
 
 function getSlotScale(slot: number): number {
@@ -940,10 +940,10 @@ export function StackedVideoCards({
           <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
         </div>
 
-        {/* Centered 3D 4:3 Cards Stack (Compact Size, 4:3 Ratio) */}
+        {/* Centered 3D 4:3 Cards Stack */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-[560px] sm:max-w-[620px] md:max-w-[680px] lg:max-w-[720px] aspect-[4/3] max-h-[52vh] sm:max-h-[55vh] md:max-h-[58vh] flex items-center justify-center mt-6 sm:mt-8"
+          className="relative w-full max-w-[580px] sm:max-w-[640px] md:max-w-[700px] lg:max-w-[740px] aspect-[4/3] max-h-[54vh] sm:max-h-[58vh] md:max-h-[60vh] flex items-center justify-center mt-6 sm:mt-8"
         >
           {videos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
