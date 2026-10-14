@@ -4,6 +4,7 @@ import {
   getVideoById,
   getPlayback,
   getManifest,
+  getVideoDownload,
   shouldIncrementView,
 } from "./video.service";
 import { db } from "../../prisma/db";
@@ -445,4 +446,250 @@ describe("Video Publication, Visibility & HLS Playback Delivery", () => {
       expect(otherClient).toBe(true);
     });
   });
+
+  // ==========================================================================
+  // 6. Video Download Delivery & Access Control
+  // ==========================================================================
+  describe("getVideoDownload (Production MP4 Download Delivery)", () => {
+    it("returns the highest available quality by default when quality is omitted", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPublicUpload,
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_completed_pub", undefined);
+        expect(download.videoId).toBe("upl_completed_pub");
+        expect(download.resolution).toBe("1080p");
+        expect(download.downloadUrl).toBeTruthy();
+        expect(download.fileName).toBe("Awesome_HLS_Stream_1080p.mp4");
+        expect(download.expiresInSeconds).toBe(300);
+        expect(download.availableResolutions).toEqual(["1080p", "720p"]);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("returns the specific requested quality when available (e.g. 720p)", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPublicUpload,
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_completed_pub", "720p");
+        expect(download.videoId).toBe("upl_completed_pub");
+        expect(download.resolution).toBe("720p");
+        expect(download.fileName).toBe("Awesome_HLS_Stream_720p.mp4");
+        expect(download.downloadUrl).toBeTruthy();
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("normalizes quality string without 'p' suffix (e.g. '720')", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPublicUpload,
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_completed_pub", "720");
+        expect(download.resolution).toBe("720p");
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("allows anyone (including unauthenticated guests) to download PUBLIC videos", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPublicUpload,
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_completed_pub", undefined, undefined);
+        expect(download.videoId).toBe("upl_completed_pub");
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("allows anyone with the link to download UNLISTED videos", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => ({
+              ...completedPublicUpload,
+              id: "upl_unlisted",
+              visibility: "UNLISTED",
+            }),
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_unlisted", undefined, undefined);
+        expect(download.videoId).toBe("upl_unlisted");
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("allows the channel owner to download their own PRIVATE video", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPrivateUpload,
+          }),
+        }),
+      });
+
+      try {
+        const download = await getVideoDownload("upl_completed_priv", undefined, mockChannelOwner);
+        expect(download.videoId).toBe("upl_completed_priv");
+        expect(download.resolution).toBe("720p");
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("strictly blocks unauthorized users and guests from downloading PRIVATE videos with 403 Forbidden", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPrivateUpload,
+          }),
+        }),
+      });
+
+      try {
+        // Stranger attempt
+        await expect(
+          getVideoDownload("upl_completed_priv", undefined, mockStranger),
+        ).rejects.toThrow(AppError);
+
+        // Guest attempt
+        await expect(
+          getVideoDownload("upl_completed_priv", undefined, undefined),
+        ).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("rejects download request for non-existent video ID with 404 Not Found", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => null,
+          }),
+        }),
+      });
+
+      try {
+        await expect(getVideoDownload("non_existent_id")).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("rejects download request when video processing is still PENDING or TRANSCODING with 409 Conflict", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => ({
+              ...completedPublicUpload,
+              processingStatus: "TRANSCODING",
+            }),
+          }),
+        }),
+      });
+
+      try {
+        await expect(getVideoDownload("upl_transcoding")).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("rejects download request when video processing FAILED with 422 Unprocessable Entity", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => ({
+              ...completedPublicUpload,
+              processingStatus: "FAILED",
+            }),
+          }),
+        }),
+      });
+
+      try {
+        await expect(getVideoDownload("upl_failed")).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("rejects unavailable quality selection with 400 Bad Request listing available renditions", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => completedPublicUpload,
+          }),
+        }),
+      });
+
+      try {
+        await expect(getVideoDownload("upl_completed_pub", "4K")).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+
+    it("rejects download if completed video has 0 renditions recorded with 404 Not Found", async () => {
+      const originalUploadWhere = db.orm.public.Upload.where;
+      (db.orm.public.Upload as any).where = () => ({
+        include: () => ({
+          include: () => ({
+            first: async () => ({
+              ...completedPublicUpload,
+              videos: [],
+            }),
+          }),
+        }),
+      });
+
+      try {
+        await expect(getVideoDownload("upl_no_renditions")).rejects.toThrow(AppError);
+      } finally {
+        (db.orm.public.Upload as any).where = originalUploadWhere;
+      }
+    });
+  });
 });
+

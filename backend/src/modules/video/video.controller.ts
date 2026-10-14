@@ -122,6 +122,24 @@ const getManifest = asyncHandler(async (req: Request, res: Response) => {
   res.redirect(302, manifestData.manifestUrl);
 });
 
+const getDownload = asyncHandler(async (req: Request, res: Response) => {
+  const { videoId, id } = req.params;
+  const targetId = videoId || id;
+  if (!targetId || typeof targetId !== "string") {
+    throw new AppError("Video ID is required.", 400);
+  }
+
+  const quality = req.query.quality as string | undefined;
+  const downloadData = await videoService.getVideoDownload(targetId, quality, req.user?.id);
+
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  res.status(200).json({
+    success: true,
+    message: "Download URL generated successfully",
+    data: downloadData,
+  });
+});
+
 const likeVideo = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     throw new AppError("Unauthorized.", 401);
@@ -343,6 +361,7 @@ export {
   deleteVideo,
   getPlayback,
   getManifest,
+  getDownload,
   likeVideo,
   unlikeVideo,
   getVideoLikeStatus,

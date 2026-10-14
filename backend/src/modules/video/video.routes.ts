@@ -6,6 +6,7 @@ import {
   deleteVideo,
   getPlayback,
   getManifest,
+  getDownload,
   likeVideo,
   unlikeVideo,
   getVideoLikeStatus,
@@ -27,9 +28,10 @@ const router = Router();
 // Section 6: VIDEOS / PUBLICATION
 router.post("/", authMiddleware, publishVideo);
 
-// Section 8: PLAYBACK
+// Section 8: PLAYBACK & DOWNLOAD
 router.get("/:videoId/playback", optionalAuthMiddleware, getPlayback);
 router.get("/:videoId/manifest", optionalAuthMiddleware, getManifest);
+router.get("/:videoId/download", optionalAuthMiddleware, getDownload);
 
 // Section 9: REACTIONS
 router.put("/:videoId/like", authMiddleware, likeVideo);

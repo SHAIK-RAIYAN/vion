@@ -93,6 +93,16 @@ export interface LikeStatus {
   userInteraction: "LIKE" | "DISLIKE" | null;
 }
 
+export interface VideoDownloadInfo {
+  videoId: string;
+  title: string;
+  resolution: string;
+  downloadUrl: string;
+  fileName: string;
+  expiresInSeconds: number;
+  availableResolutions: string[];
+}
+
 export interface PaginationMeta {
   total: number;
   page: number;

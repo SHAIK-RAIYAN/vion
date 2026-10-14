@@ -185,6 +185,9 @@ GET    /api/v1/videos/:videoId/playback
 GET    /api/v1/videos/:videoId/manifest
        — Return/access the HLS manifest for adaptive streaming.
 
+GET    /api/v1/videos/:videoId/download - DONE✅
+       — Validate permissions and return a secure, short-lived signed Supabase download URL for MP4 renditions.
+
 
 ==================================================
 9. REACTIONS

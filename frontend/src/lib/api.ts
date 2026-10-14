@@ -442,6 +442,13 @@ export const api = {
       });
     },
 
+    getDownload: async (videoId: string, quality?: string) => {
+      const q = quality ? `?quality=${encodeURIComponent(quality)}` : "";
+      return request<{ message: string; data: any }>(`/videos/${videoId}/download${q}`, {
+        method: "GET",
+      });
+    },
+
     like: async (videoId: string) => {
       return request<{ message: string; data: any }>(`/videos/${videoId}/like`, {
         method: "PUT",

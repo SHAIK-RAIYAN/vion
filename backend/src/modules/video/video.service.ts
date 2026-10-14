@@ -1,5 +1,7 @@
 import { db } from "../../prisma/db";
 import { AppError } from "../../utils/AppError";
+import * as storageService from "../../services/storageService";
+import { STORAGE_PROCESSED_BUCKET, isStorageConfigured } from "../../config/config";
 import {
   publishVideoSchema,
   updateVideoSchema,
@@ -333,3 +335,142 @@ export async function finalizeThumbnail(
   const updated = await Upload.where({ id: videoId }).update({ thumbnailUrl });
   return updated;
 }
+
+export interface VideoDownloadResult {
+  videoId: string;
+  title: string;
+  resolution: string;
+  downloadUrl: string;
+  fileName: string;
+  expiresInSeconds: number;
+  availableResolutions: string[];
+}
+
+/**
+ * Validates permissions, checks video readiness, resolves the requested/best MP4 rendition,
+ * and creates a short-lived Supabase signed download URL with Content-Disposition attachment.
+ */
+export async function getVideoDownload(
+  videoId: string,
+  requestedQuality?: string,
+  currentUserId?: string,
+): Promise<VideoDownloadResult> {
+  const video = await Upload.where({ id: videoId, isDeleted: false })
+    .include("channel", (c) =>
+      c.select("id", "userId", "handle", "channelName", "profilePictureUrl"),
+    )
+    .include("videos", (v) => v.select("id", "resolution", "url"))
+    .first();
+
+  if (!video) {
+    throw new AppError("Video not found.", 404, "VIDEO_NOT_FOUND");
+  }
+
+  // Server-side authorization check for private video downloads
+  if (video.visibility === "PRIVATE") {
+    if (!currentUserId || video.channel.userId !== currentUserId) {
+      throw new AppError("This video is private.", 403, "PRIVATE_VIDEO");
+    }
+  }
+
+  // Ensure video processing has succeeded and completed
+  if (video.processingStatus !== "COMPLETED") {
+    throw new AppError(
+      video.processingStatus === "FAILED"
+        ? "Video processing failed. Download is not available."
+        : "Video is still processing. Download will be available once transcoding completes.",
+      video.processingStatus === "FAILED" ? 422 : 409,
+      "DOWNLOAD_NOT_READY",
+    );
+  }
+
+  const renditions = video.videos || [];
+  if (renditions.length === 0) {
+    throw new AppError(
+      "No downloadable renditions found for this video.",
+      404,
+      "NO_RENDITIONS_AVAILABLE",
+    );
+  }
+
+  // Helper to parse numeric height from resolution string (e.g. "1080p" -> 1080)
+  const parseHeight = (res: string) => {
+    const match = res.match(/(\d+)/);
+    return match && match[1] ? parseInt(match[1], 10) : 0;
+  };
+
+  // Sort renditions descending by resolution height (highest quality first)
+  const sortedRenditions = [...renditions].sort(
+    (a, b) => parseHeight(b.resolution) - parseHeight(a.resolution),
+  );
+
+  let targetRendition = sortedRenditions[0]!;
+
+  if (requestedQuality) {
+    const normalizedTarget = requestedQuality.trim().toLowerCase();
+    const matched = renditions.find((r) => {
+      const rNorm = r.resolution.toLowerCase();
+      return (
+        rNorm === normalizedTarget ||
+        rNorm === `${normalizedTarget}p` ||
+        rNorm.replace("p", "") === normalizedTarget.replace("p", "")
+      );
+    });
+
+    if (!matched) {
+      const available = renditions.map((r) => r.resolution).join(", ");
+      throw new AppError(
+        `Requested quality '${requestedQuality}' is not available. Available qualities: ${available}`,
+        400,
+        "INVALID_RENDITION",
+      );
+    }
+    targetRendition = matched;
+  }
+
+  // Build clean and descriptive MP4 filename
+  const cleanTitle = (video.title || "video")
+    .trim()
+    .replace(/[^a-zA-Z0-9_\-\s]/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 60);
+  const downloadFileName = `${cleanTitle}_${targetRendition.resolution}.mp4`;
+
+  // Determine storage key
+  const storageKey = storageService.generateMp4Key(
+    video.channelId,
+    video.id,
+    targetRendition.resolution,
+  );
+
+  const expiresInSeconds = 300; // 5-minute short-lived download token
+  let downloadUrl = "";
+
+  if (isStorageConfigured()) {
+    try {
+      downloadUrl = await storageService.createSignedDownloadUrl(
+        STORAGE_PROCESSED_BUCKET,
+        storageKey,
+        expiresInSeconds,
+        { download: downloadFileName },
+      );
+    } catch (storageErr: any) {
+      // Fallback to public URL if signed URL creation fails or object was uploaded as public
+      downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+    }
+  } else {
+    // If running in local mock environment without remote Supabase
+    downloadUrl = targetRendition.url || storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+  }
+
+  return {
+    videoId: video.id,
+    title: video.title,
+    resolution: targetRendition.resolution,
+    downloadUrl,
+    fileName: downloadFileName,
+    expiresInSeconds,
+    availableResolutions: sortedRenditions.map((r) => r.resolution),
+  };
+}
+

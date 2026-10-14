@@ -15,6 +15,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Loader2,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ interface HlsVideoPlayerProps {
   isProcessing?: boolean;
   initialProgressSeconds?: number;
   className?: string;
+  availableResolutions?: string[];
+  onDownloadQuality?: (quality: string) => void;
 }
 
 interface QualityLevel {
@@ -43,6 +46,8 @@ export function HlsVideoPlayer({
   isProcessing = false,
   initialProgressSeconds = 0,
   className,
+  availableResolutions,
+  onDownloadQuality,
 }: HlsVideoPlayerProps) {
   const { user } = useAuth();
 
@@ -615,6 +620,18 @@ export function HlsVideoPlayer({
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Download Option from Player */}
+            {onDownloadQuality && availableResolutions && availableResolutions.length > 0 && !isProcessing && (
+              <button
+                type="button"
+                onClick={() => onDownloadQuality(availableResolutions[0]!)}
+                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors cursor-pointer text-white/90 hover:text-white"
+                title={`Download MP4 (${availableResolutions[0]})`}
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
             )}
 
             {/* Fullscreen */}

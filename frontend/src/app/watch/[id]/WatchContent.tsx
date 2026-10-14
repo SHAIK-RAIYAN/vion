@@ -22,7 +22,16 @@ import {
   Trash2,
   Send,
   Loader2,
+  Download,
+  ChevronDown,
+  Film,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { AppShell } from "@/components/navigation/AppShell";
 import ReusableErrorBoundary from "@/components/ReusableErrorBoundary";
@@ -42,6 +51,9 @@ export function WatchContent({ id }: { id: string }) {
   // Reactions state
   const [likeStatus, setLikeStatus] = useState<LikeStatus | null>(null);
   const [liking, setLiking] = useState(false);
+
+  // Download state
+  const [downloadingQuality, setDownloadingQuality] = useState<string | null>(null);
 
   // Comments state
   const [comments, setComments] = useState<Comment[]>([]);
@@ -197,6 +209,35 @@ export function WatchContent({ id }: { id: string }) {
     }
   };
 
+  // High-speed native browser download using short-lived signed URLs
+  const handleDownload = async (quality?: string) => {
+    if (!video) return;
+    setDownloadingQuality(quality || "default");
+    try {
+      const res = await api.videos.getDownload(video.id, quality);
+      const downloadData = res.data;
+      if (!downloadData?.downloadUrl) {
+        throw new Error("Download URL could not be generated.");
+      }
+
+      // Stream directly to disk via native browser download
+      // Avoids buffering in Axios or storing large binary blobs in JS memory
+      const link = document.createElement("a");
+      link.href = downloadData.downloadUrl;
+      link.setAttribute("download", downloadData.fileName || `${video.title || "video"}.mp4`);
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Download started for ${downloadData.resolution || "MP4"}`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start download");
+    } finally {
+      setDownloadingQuality(null);
+    }
+  };
+
   // Submit comment
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,6 +329,16 @@ export function WatchContent({ id }: { id: string }) {
 
   const isOwner = user?.id && video.channel?.userId === user.id;
 
+  const parseHeight = (res: string) => {
+    const match = res.match(/(\d+)/);
+    return match && match[1] ? parseInt(match[1], 10) : 0;
+  };
+
+  const availableRenditions = (video.videos || []).slice().sort(
+    (a, b) => parseHeight(b.resolution) - parseHeight(a.resolution),
+  );
+  const isVideoProcessing = video.processingStatus !== "COMPLETED";
+
   return (
     <AppShell>
       <ReusableErrorBoundary>
@@ -309,8 +360,10 @@ export function WatchContent({ id }: { id: string }) {
               manifestUrl={video.hlsManifestUrl}
               thumbnailUrl={video.thumbnailUrl}
               title={video.title}
-              isProcessing={video.processingStatus !== "COMPLETED"}
+              isProcessing={isVideoProcessing}
               initialProgressSeconds={initialProgressSeconds}
+              availableResolutions={availableRenditions.map((r) => r.resolution)}
+              onDownloadQuality={handleDownload}
             />
 
             {/* Badges on Video Container */}
@@ -390,7 +443,7 @@ export function WatchContent({ id }: { id: string }) {
                 </div>
               )}
 
-              {/* Like Reaction & Metrics */}
+              {/* Like Reaction, Download & Metrics */}
               <div className="flex items-center gap-3">
                 {/* Like Button */}
                 <Button
@@ -411,6 +464,90 @@ export function WatchContent({ id }: { id: string }) {
                   />
                   <span>{likeStatus?.likes ?? 0}</span>
                 </Button>
+
+                {/* Download Action with Quality Selector */}
+                {isVideoProcessing ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border opacity-60 cursor-not-allowed"
+                    title="Downloads will become available once video processing completes"
+                  >
+                    <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Processing...</span>
+                  </Button>
+                ) : availableRenditions.length === 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border opacity-60 cursor-not-allowed"
+                    title="No downloadable renditions available"
+                  >
+                    <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Download</span>
+                  </Button>
+                ) : availableRenditions.length === 1 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDownload(availableRenditions[0]?.resolution)}
+                    disabled={Boolean(downloadingQuality)}
+                    className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
+                    title={`Download ${availableRenditions[0]?.resolution} MP4`}
+                  >
+                    {downloadingQuality ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    <span>Download ({availableRenditions[0]?.resolution})</span>
+                  </Button>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={Boolean(downloadingQuality)}
+                        className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
+                        title="Download video in high-definition MP4"
+                      >
+                        {downloadingQuality ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5" />
+                        )}
+                        <span>Download</span>
+                        <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-48 p-1.5 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-xl z-50"
+                    >
+                      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Select MP4 Quality
+                      </div>
+                      {availableRenditions.map((r) => (
+                        <DropdownMenuItem
+                          key={r.id || r.resolution}
+                          onClick={() => handleDownload(r.resolution)}
+                          className="flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-accent focus:bg-accent transition-colors"
+                        >
+                          <span className="font-semibold text-foreground flex items-center gap-1.5">
+                            <Film className="w-3.5 h-3.5 text-muted-foreground" />
+                            {r.resolution}
+                          </span>
+                          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            MP4
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
 
                 {/* Views & Date metrics */}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground ml-2">

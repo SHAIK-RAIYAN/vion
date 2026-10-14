@@ -78,6 +78,14 @@ export function generateHlsMasterPlaylistPath(channelId: string, videoId: string
   return `${generateHlsBasePath(channelId, videoId)}/master.m3u8`;
 }
 
+export function generateMp4Key(
+  channelId: string,
+  videoId: string,
+  resolution: string,
+): string {
+  return `processed/${channelId}/${videoId}/mp4/${resolution}.mp4`;
+}
+
 export function generateThumbnailKey(
   channelId: string,
   videoId: string,
@@ -181,12 +189,13 @@ export async function createSignedDownloadUrl(
   bucket: string,
   path: string,
   expiresInSeconds = 3600,
+  options?: { download?: string | boolean },
 ): Promise<string> {
   const client = getSupabaseClient();
 
   const { data, error } = await client.storage
     .from(bucket)
-    .createSignedUrl(path, expiresInSeconds);
+    .createSignedUrl(path, expiresInSeconds, options);
 
   if (error || !data?.signedUrl) {
     throw new AppError(

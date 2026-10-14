@@ -170,6 +170,8 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
 
       expect(fs.existsSync(result.playlistPath)).toBe(true);
       expect(result.segmentPaths.length).toBeGreaterThan(0);
+      expect(fs.existsSync(result.mp4Path)).toBe(true);
+      expect(fs.statSync(result.mp4Path).size).toBeGreaterThan(0);
 
       const playlistContent = fs.readFileSync(result.playlistPath, "utf8");
       expect(playlistContent).toContain("#EXT-X-PLAYLIST-TYPE:VOD");
@@ -198,6 +200,8 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
 
       expect(fs.existsSync(result.playlistPath)).toBe(true);
       expect(result.segmentPaths.length).toBeGreaterThan(0);
+      expect(fs.existsSync(result.mp4Path)).toBe(true);
+      expect(fs.statSync(result.mp4Path).size).toBeGreaterThan(0);
 
       const playlistContent = fs.readFileSync(result.playlistPath, "utf8");
       expect(playlistContent).toContain("#EXT-X-ENDLIST");
@@ -208,10 +212,13 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
   // 4. Local Package Verification & Error Detection
   // ==========================================================================
   describe("verifyHlsPackageLocal", () => {
-    it("passes verification when all playlists, terminators, and segment files exist", () => {
+    it("passes verification when all playlists, MP4s, terminators, and segment files exist", () => {
       const outputDir = path.join(testDir, "verify_pass_test");
       const renditionDir = path.join(outputDir, "360p");
       fs.mkdirSync(renditionDir, { recursive: true });
+
+      // Write mock valid MP4 rendition
+      fs.writeFileSync(path.join(renditionDir, "360p.mp4"), Buffer.alloc(2048, 0x00));
 
       // Write mock valid segment
       fs.writeFileSync(path.join(renditionDir, "segment_000.ts"), Buffer.alloc(1024, 0x47));
@@ -229,10 +236,31 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
       expect(() => verifyHlsPackageLocal(outputDir, [profile])).not.toThrow();
     });
 
+    it("detects missing MP4 rendition file and throws descriptive AppError", () => {
+      const outputDir = path.join(testDir, "verify_fail_mp4_test");
+      const renditionDir = path.join(outputDir, "360p");
+      fs.mkdirSync(renditionDir, { recursive: true });
+
+      // Write segment and playlist but omit 360p.mp4
+      fs.writeFileSync(path.join(renditionDir, "segment_000.ts"), Buffer.alloc(1024, 0x47));
+      fs.writeFileSync(
+        path.join(renditionDir, "index.m3u8"),
+        `#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:6.0,\nsegment_000.ts\n#EXT-X-ENDLIST\n`,
+      );
+
+      const profile = STANDARD_QUALITY_LADDER.find((p) => p.name === "360p")!;
+      buildMasterPlaylist(outputDir, [profile], 30);
+
+      expect(() => verifyHlsPackageLocal(outputDir, [profile])).toThrow(AppError);
+    });
+
     it("detects missing segment file and throws descriptive AppError", () => {
       const outputDir = path.join(testDir, "verify_fail_test");
       const renditionDir = path.join(outputDir, "360p");
       fs.mkdirSync(renditionDir, { recursive: true });
+
+      // Write valid MP4 but missing segment in playlist
+      fs.writeFileSync(path.join(renditionDir, "360p.mp4"), Buffer.alloc(2048, 0x00));
 
       // Playlist references segment_missing.ts which does not exist
       fs.writeFileSync(
@@ -316,7 +344,7 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
         (db.orm.public.Upload as any).where = originalWhere;
         (db.orm.public.Video as any).create = originalCreate;
       }
-    });
+    }, 20000);
 
     it("processes very short video (< 1s) successfully without crashing", async () => {
       const mockUpload = {
@@ -346,7 +374,7 @@ describe("FFmpeg Transcoding & Adaptive Streaming Pipeline", () => {
       } finally {
         (db.orm.public.Upload as any).where = originalWhere;
       }
-    });
+    }, 20000);
 
     it("rejects corrupt media input and guarantees scratch cleanup", async () => {
       const mockUpload = {

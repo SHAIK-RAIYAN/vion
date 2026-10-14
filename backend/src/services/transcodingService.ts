@@ -57,6 +57,8 @@ export interface EncodedRenditionResult {
   playlistRelativePath: string;
   segmentPaths: string[];
   publicUrl: string;
+  mp4Path: string;
+  mp4Url?: string;
 }
 
 export interface ProcessVideoResult {
@@ -229,6 +231,9 @@ export async function encodeRenditionHls(
   const renditionDir = path.join(outputDir, rendition.name);
   fs.mkdirSync(renditionDir, { recursive: true });
 
+  const mp4FileName = `${rendition.name}.mp4`;
+  const mp4Path = path.join(renditionDir, mp4FileName);
+
   const playlistFileName = "index.m3u8";
   const playlistPath = path.join(renditionDir, playlistFileName);
   const segmentPattern = path.join(renditionDir, "segment_%03d.ts");
@@ -237,7 +242,8 @@ export async function encodeRenditionHls(
   const fps = frameRate > 0 ? frameRate : 30;
   const gopSize = Math.max(24, Math.round(fps * 6));
 
-  const args: string[] = [
+  // Pass 1: Encode the scaled rendition to progressive MP4 with keyframe alignment & +faststart
+  const mp4Args: string[] = [
     "-hide_banner",
     "-loglevel", "error",
     "-threads", FFMPEG_THREADS.toString(),
@@ -246,10 +252,10 @@ export async function encodeRenditionHls(
 
   // If source video lacks audio, synthesize silent stereo audio track via lavfi
   if (!hasAudio) {
-    args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000");
+    mp4Args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000");
   }
 
-  args.push(
+  mp4Args.push(
     // Video mapping & encoding
     "-map", "0:v:0",
     "-c:v", "libx264",
@@ -263,7 +269,7 @@ export async function encodeRenditionHls(
     "-vf", `scale=-2:${rendition.height}`,
     "-threads", FFMPEG_THREADS.toString(),
 
-    // GOP / Keyframe Alignment for Apple HLS
+    // GOP / Keyframe Alignment for Apple HLS and consistent segmenting
     "-g",
     gopSize.toString(),
     "-keyint_min",
@@ -286,25 +292,44 @@ export async function encodeRenditionHls(
     "2",
     ...(hasAudio ? [] : ["-shortest"]),
 
-    // HLS Packaging options
-    "-hls_time",
-    "6", // Target 6s segment duration
-    "-hls_playlist_type",
-    "vod", // VOD playlist with #EXT-X-ENDLIST
-    "-hls_segment_type",
-    "mpegts", // Transport stream chunks
-    "-hls_flags",
-    "independent_segments",
-    "-hls_list_size",
-    "0", // Retain all segments in playlist
-    "-hls_segment_filename",
-    segmentPattern,
+    // Faststart for progressive MP4 download/streaming
+    "-movflags",
+    "+faststart",
     "-y",
-    playlistPath,
+    mp4Path,
   );
 
-  await spawnProcess(FFMPEG_PATH, args, {
+  await spawnProcess(FFMPEG_PATH, mp4Args, {
     timeoutMs: timeoutMs || MAX_PROCESSING_DURATION_SECONDS * 1000,
+  });
+
+  if (!fs.existsSync(mp4Path) || fs.statSync(mp4Path).size === 0) {
+    throw new AppError(
+      `FFmpeg completed but failed to generate MP4 file for ${rendition.name}: ${mp4Path}`,
+      500,
+      "MP4_NOT_GENERATED",
+    );
+  }
+
+  // Pass 2: Package into Apple HLS segments via zero-reencode stream copy (-c copy)
+  // Reuses the identical encoded MP4 frames, completing in milliseconds with no duplicate CPU load.
+  const hlsArgs: string[] = [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-i", mp4Path,
+    "-c", "copy",
+    "-hls_time", "6",
+    "-hls_playlist_type", "vod",
+    "-hls_segment_type", "mpegts",
+    "-hls_flags", "independent_segments",
+    "-hls_list_size", "0",
+    "-hls_segment_filename", segmentPattern,
+    "-y",
+    playlistPath,
+  ];
+
+  await spawnProcess(FFMPEG_PATH, hlsArgs, {
+    timeoutMs: 60000,
   });
 
   // Verify that playlist and segment files were written
@@ -336,6 +361,7 @@ export async function encodeRenditionHls(
     playlistRelativePath: `${rendition.name}/${playlistFileName}`,
     segmentPaths: segmentFiles,
     publicUrl: "", // Assigned after storage upload
+    mp4Path,
   };
 }
 
@@ -403,6 +429,16 @@ export function verifyHlsPackageLocal(
 
   for (const item of renditions) {
     const renditionDir = path.join(outputDir, item.name);
+    const mp4Path = path.join(renditionDir, `${item.name}.mp4`);
+
+    if (!fs.existsSync(mp4Path) || fs.statSync(mp4Path).size === 0) {
+      throw new AppError(
+        `MP4 rendition file missing or empty for ${item.name}: ${mp4Path}`,
+        500,
+        "MISSING_MP4_FILE",
+      );
+    }
+
     const playlistPath = path.join(renditionDir, "index.m3u8");
 
     if (!fs.existsSync(playlistPath) || fs.statSync(playlistPath).size === 0) {
@@ -476,13 +512,13 @@ export async function uploadHlsAssetsToStorage(
   renditionResults: EncodedRenditionResult[],
 ): Promise<{
   masterManifestUrl: string;
-  renditionUrls: { name: string; url: string; segmentCount: number }[];
+  renditionUrls: { name: string; url: string; mp4Url: string; segmentCount: number }[];
 }> {
   const basePrefix = `processed/${channelId}/${uploadId}/hls`;
-  const renditionUrls: { name: string; url: string; segmentCount: number }[] = [];
+  const renditionUrls: { name: string; url: string; mp4Url: string; segmentCount: number }[] = [];
 
   for (const item of renditionResults) {
-    const { rendition, segmentPaths, playlistPath } = item;
+    const { rendition, segmentPaths, playlistPath, mp4Path } = item;
     const renditionPrefix = `${basePrefix}/${rendition.name}`;
 
     // 1. Upload segment files
@@ -521,15 +557,37 @@ export async function uploadHlsAssetsToStorage(
     });
     const playlistUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, playlistKey);
 
+    // 3. Upload progressive MP4 rendition for fast, resume-compatible download
+    const mp4Key = storageService.generateMp4Key(channelId, uploadId, rendition.name);
+    let mp4Url = "";
+
+    if (isStorageConfigured() && mp4Path && fs.existsSync(mp4Path)) {
+      try {
+        const mp4Buffer = fs.readFileSync(mp4Path);
+        await storageService.uploadFile(STORAGE_PROCESSED_BUCKET, mp4Key, mp4Buffer, {
+          contentType: "video/mp4",
+          upsert: true,
+        });
+        mp4Url = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, mp4Key);
+      } catch (mp4UploadErr: any) {
+        console.warn(`[Transcoding Service] Storage upload warning for MP4 ${mp4Key}: ${mp4UploadErr.message}`);
+      }
+    } else {
+      mp4Url = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, mp4Key);
+    }
+
     item.publicUrl = playlistUrl;
+    item.mp4Url = mp4Url;
+
     renditionUrls.push({
       name: rendition.name,
       url: playlistUrl,
+      mp4Url,
       segmentCount: segmentPaths.length,
     });
   }
 
-  // 3. Upload master playlist last
+  // 4. Upload master playlist last
   const masterKey = `${basePrefix}/master.m3u8`;
   const masterPath = path.join(outputDir, "master.m3u8");
 
@@ -584,7 +642,7 @@ export async function verifyRemoteHlsAssets(
 export async function commitTranscodeCompletion(
   uploadId: string,
   masterManifestUrl: string,
-  renditionUrls: { name: string; url: string }[],
+  renditionUrls: { name: string; url: string; mp4Url?: string }[],
   activeThumbnailUrl?: string,
 ): Promise<void> {
   // Update Upload table status
@@ -594,13 +652,13 @@ export async function commitTranscodeCompletion(
     ...(activeThumbnailUrl ? { thumbnailUrl: activeThumbnailUrl } : {}),
   });
 
-  // Record individual rendition profiles in the Video table
+  // Record individual rendition profiles in the Video table with MP4 download URL
   for (const item of renditionUrls) {
     try {
       await Video.create({
         uploadId,
         resolution: item.name,
-        url: item.url,
+        url: item.mp4Url || item.url,
       });
     } catch (dbErr: any) {
       console.warn(`[Transcoding Service] Notice recording Video rendition ${item.name}: ${dbErr.message}`);

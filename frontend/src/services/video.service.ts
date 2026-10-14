@@ -7,6 +7,7 @@ import type {
   ApiSuccessEnvelope,
   PlaybackInfo,
   LikeStatus,
+  VideoDownloadInfo,
 } from "@/types/api";
 
 export const videoService = {
@@ -32,6 +33,14 @@ export const videoService = {
       `/videos/${id}/playback`,
     );
     return "data" in res.data && res.data.success ? res.data.data : (res.data as PlaybackInfo);
+  },
+
+  async getDownload(id: string, quality?: string): Promise<VideoDownloadInfo> {
+    const res = await axiosClient.get<ApiSuccessEnvelope<VideoDownloadInfo> | VideoDownloadInfo>(
+      `/videos/${id}/download`,
+      { params: quality ? { quality } : undefined },
+    );
+    return "data" in res.data && res.data.success ? res.data.data : (res.data as VideoDownloadInfo);
   },
 
   async getReaction(id: string): Promise<LikeStatus> {
