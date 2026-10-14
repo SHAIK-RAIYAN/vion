@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HlsVideoPlayer } from "@/components/video/HlsVideoPlayer";
+import { DownloadModal } from "@/components/video/DownloadModal";
 import {
   ArrowLeft,
   UserCheck,
@@ -77,6 +78,7 @@ export function WatchContent({ id }: { id: string }) {
 
   // Download state
   const [downloadingQuality, setDownloadingQuality] = useState<string | null>(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   // Comments state
   const [comments, setComments] = useState<Comment[]>([]);
@@ -411,6 +413,7 @@ export function WatchContent({ id }: { id: string }) {
               initialProgressSeconds={initialProgressSeconds}
               availableResolutions={availableRenditions.map((r) => r.resolution)}
               onDownloadQuality={handleDownload}
+              onOpenDownloadModal={() => setIsDownloadModalOpen(true)}
             />
 
             {/* Badges on Video Container */}
@@ -535,65 +538,23 @@ export function WatchContent({ id }: { id: string }) {
                     <Download className="w-3.5 h-3.5 text-muted-foreground" />
                     <span>Download</span>
                   </Button>
-                ) : availableRenditions.length === 1 ? (
+                ) : (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleDownload(availableRenditions[0]?.resolution)}
+                    onClick={() => setIsDownloadModalOpen(true)}
                     disabled={Boolean(downloadingQuality)}
                     className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
-                    title={`Download ${availableRenditions[0]?.resolution} MP4`}
+                    title="Download video (Select resolution)"
                   >
                     {downloadingQuality ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
-                    <span>Download ({availableRenditions[0]?.resolution})</span>
+                    <span>Download</span>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
                   </Button>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={Boolean(downloadingQuality)}
-                        className="text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
-                        title="Download video in high-definition MP4"
-                      >
-                        {downloadingQuality ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
-                        ) : (
-                          <Download className="w-3.5 h-3.5" />
-                        )}
-                        <span>Download</span>
-                        <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-48 p-1.5 rounded-xl border border-border bg-card/95 backdrop-blur-md shadow-xl z-50"
-                    >
-                      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Select MP4 Quality
-                      </div>
-                      {availableRenditions.map((r) => (
-                        <DropdownMenuItem
-                          key={r.id || r.resolution}
-                          onClick={() => handleDownload(r.resolution)}
-                          className="flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer hover:bg-accent focus:bg-accent transition-colors"
-                        >
-                          <span className="font-semibold text-foreground flex items-center gap-1.5">
-                            <Film className="w-3.5 h-3.5 text-muted-foreground" />
-                            {r.resolution}
-                          </span>
-                          <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                            MP4
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 )}
 
                 {/* Views & Date metrics */}
@@ -741,6 +702,17 @@ export function WatchContent({ id }: { id: string }) {
               </div>
             )}
           </div>
+
+          {/* Download Resolution Selection Modal */}
+          <DownloadModal
+            isOpen={isDownloadModalOpen}
+            onClose={() => setIsDownloadModalOpen(false)}
+            videoTitle={video.title}
+            thumbnailUrl={video.thumbnailUrl}
+            renditions={availableRenditions}
+            onDownload={handleDownload}
+            downloadingQuality={downloadingQuality}
+          />
         </div>
       </ReusableErrorBoundary>
     </AppShell>

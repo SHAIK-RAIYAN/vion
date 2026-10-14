@@ -29,6 +29,7 @@ interface HlsVideoPlayerProps {
   className?: string;
   availableResolutions?: string[];
   onDownloadQuality?: (quality: string) => void;
+  onOpenDownloadModal?: () => void;
 }
 
 interface QualityLevel {
@@ -48,6 +49,7 @@ export function HlsVideoPlayer({
   className,
   availableResolutions,
   onDownloadQuality,
+  onOpenDownloadModal,
 }: HlsVideoPlayerProps) {
   const { user } = useAuth();
 
@@ -623,12 +625,18 @@ export function HlsVideoPlayer({
             )}
 
             {/* Download Option from Player */}
-            {onDownloadQuality && availableResolutions && availableResolutions.length > 0 && !isProcessing && (
+            {(onOpenDownloadModal || onDownloadQuality) && availableResolutions && availableResolutions.length > 0 && !isProcessing && (
               <button
                 type="button"
-                onClick={() => onDownloadQuality(availableResolutions[0]!)}
+                onClick={() => {
+                  if (onOpenDownloadModal) {
+                    onOpenDownloadModal();
+                  } else if (onDownloadQuality) {
+                    onDownloadQuality(availableResolutions[0]!);
+                  }
+                }}
                 className="p-1.5 rounded-lg hover:bg-white/20 transition-colors cursor-pointer text-white/90 hover:text-white"
-                title={`Download MP4 (${availableResolutions[0]})`}
+                title="Download Video (Select Resolution)"
               >
                 <Download className="w-3.5 h-3.5" />
               </button>
