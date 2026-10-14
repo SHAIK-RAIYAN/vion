@@ -44,15 +44,24 @@ export function GalleryGrid({
       const cards = gridRef.current.querySelectorAll(".gallery-card");
       gsap.fromTo(
         cards,
-        { opacity: 0, y: 30, scale: 0.98 },
+        {
+          opacity: 0,
+          scale: 0.9,
+          y: 35,
+          filter: "blur(4px)",
+        },
         {
           opacity: 1,
-          y: 0,
           scale: 1,
-          stagger: 0.04,
-          duration: 0.35,
-          ease: "power2.out",
-          clearProps: "transform",
+          y: 0,
+          filter: "blur(0px)",
+          stagger: {
+            amount: 0.3,
+            from: "center",
+          },
+          duration: 0.5,
+          ease: "power3.out",
+          clearProps: "all",
         },
       );
     },

@@ -97,19 +97,26 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
     );
   }, [videos, searchQuery]);
 
-  // View mode transition animation
+  // View mode transition animation (fluid morphing motion between stack and grid)
   useGSAP(
     () => {
       if (!containerRef.current || prefersReducedMotion()) return;
+      const isGrid = viewMode === "grid";
+
       gsap.fromTo(
         containerRef.current,
-        { opacity: 0.7, scale: 0.99 },
+        {
+          opacity: 0.15,
+          scale: isGrid ? 0.95 : 1.04,
+          y: isGrid ? 25 : -20,
+        },
         {
           opacity: 1,
           scale: 1,
-          duration: 0.35,
-          ease: "power2.out",
-          clearProps: "transform",
+          y: 0,
+          duration: 0.48,
+          ease: "power3.out",
+          clearProps: "transform,opacity",
         },
       );
     },

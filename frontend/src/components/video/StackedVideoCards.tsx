@@ -364,13 +364,18 @@ export function StackedVideoCards({
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
-  // Reset index if the feed length updates or filters change
+  // Reset index only if the underlying videos list actually changes
+  const prevVideosRef = useRef(videos);
   useEffect(() => {
-    if (currentIndex >= videos.length && videos.length > 0) {
-      setCurrentIndex(0);
-      currentIndexRef.current = 0;
+    if (prevVideosRef.current !== videos) {
+      prevVideosRef.current = videos;
+      if (currentIndexRef.current >= videos.length) {
+        const clamped = Math.max(0, videos.length - 1);
+        setCurrentIndex(clamped);
+        currentIndexRef.current = clamped;
+      }
     }
-  }, [videos.length, currentIndex]);
+  }, [videos]);
 
   const setCardRef = (index: number) => (el: HTMLDivElement | null) => {
     cardsRef.current[index] = el;
@@ -493,9 +498,9 @@ export function StackedVideoCards({
         currentIndexRef.current = nextIndex;
         setCurrentIndex(nextIndex);
 
-        // Lower the fallen card's zIndex to 0 and disable pointer events
+        // Lower the fallen card's zIndex to 0 and disable pointer events & visibility
         if (activeCard) {
-          gsap.set(activeCard, { zIndex: 0, pointerEvents: "none" });
+          gsap.set(activeCard, { zIndex: 0, pointerEvents: "none", visibility: "hidden" });
         }
 
         if (nextIndex >= videos.length - 1 && hasNextPage && onLoadMore) {
@@ -535,6 +540,7 @@ export function StackedVideoCards({
       gsap.set(nextCard, {
         zIndex: Math.max(1, 50 - targetSlot),
         pointerEvents: "auto",
+        visibility: "visible",
       });
 
       tl.to(
@@ -552,8 +558,13 @@ export function StackedVideoCards({
       );
     }
 
-    // 4. Reveal End of Feed screen if last card just fell
+    // 4. Reveal End of Feed screen ONLY if all cards have fallen
     if (nextIndex >= videos.length && endOfFeedRef.current) {
+      gsap.set(endOfFeedRef.current, {
+        zIndex: 40,
+        pointerEvents: "auto",
+        visibility: "visible",
+      });
       tl.to(
         endOfFeedRef.current,
         {
@@ -585,9 +596,9 @@ export function StackedVideoCards({
     const cardToRestore = cardsRef.current[prevIndex];
     const duration = reducedMotion ? 0.2 : 0.75;
 
-    // Elevate restored card to slot 0 zIndex
+    // Elevate restored card to slot 0 zIndex and ensure visibility
     if (cardToRestore) {
-      gsap.set(cardToRestore, { zIndex: 50, pointerEvents: "auto" });
+      gsap.set(cardToRestore, { zIndex: 50, pointerEvents: "auto", visibility: "visible" });
     }
 
     const tl = gsap.timeline({
@@ -609,6 +620,15 @@ export function StackedVideoCards({
           y: 20,
           duration: 0.35,
           ease: "power2.in",
+          onComplete: () => {
+            if (endOfFeedRef.current) {
+              gsap.set(endOfFeedRef.current, {
+                zIndex: -1,
+                pointerEvents: "none",
+                visibility: "hidden",
+              });
+            }
+          },
         },
         0,
       );
@@ -637,7 +657,11 @@ export function StackedVideoCards({
       if (!cardEl) continue;
       const targetSlot = j - prevIndex;
 
-      gsap.set(cardEl, { zIndex: Math.max(1, 50 - targetSlot) });
+      gsap.set(cardEl, {
+        zIndex: Math.max(1, 50 - targetSlot),
+        pointerEvents: "auto",
+        visibility: "visible",
+      });
 
       tl.to(
         cardEl,
@@ -671,7 +695,21 @@ export function StackedVideoCards({
     if (endOfFeedRef.current) {
       tl.to(
         endOfFeedRef.current,
-        { autoAlpha: 0, scale: 0.95, y: 20, duration: 0.3 },
+        {
+          autoAlpha: 0,
+          scale: 0.95,
+          y: 20,
+          duration: 0.3,
+          onComplete: () => {
+            if (endOfFeedRef.current) {
+              gsap.set(endOfFeedRef.current, {
+                zIndex: -1,
+                pointerEvents: "none",
+                visibility: "hidden",
+              });
+            }
+          },
+        },
         0,
       );
     }
@@ -682,6 +720,7 @@ export function StackedVideoCards({
       gsap.set(cardEl, {
         zIndex: Math.max(1, 50 - targetSlot),
         pointerEvents: "auto",
+        visibility: "visible",
       });
       tl.to(
         cardEl,
@@ -772,15 +811,35 @@ export function StackedVideoCards({
     let deltaResetTimer: NodeJS.Timeout;
 
     const handleWheel = (e: WheelEvent) => {
+      // 1. Critical: Ignore zoom gestures (Ctrl/Meta + wheel, trackpad pinch)
+      if (e.ctrlKey || e.metaKey) {
+        return;
+      }
+
       if (isAnimating.current) return;
-      if (currentIndexRef.current >= videos.length && e.deltaY > 0) return;
+
+      // 2. When at the end of the feed, lock further downward scroll completely
+      if (currentIndexRef.current >= videos.length) {
+        if (e.deltaY > 0) return;
+      }
+
       e.preventDefault();
 
       accumulatedDelta += e.deltaY;
       clearTimeout(deltaResetTimer);
       deltaResetTimer = setTimeout(() => {
         accumulatedDelta = 0;
-      }, 150);
+      }, 180);
+
+      // 3. At the end of the feed, require an intentional deliberate upward scroll
+      // to avoid inertia recoil or trackpad bounce accidentally pulling up the last card
+      if (currentIndexRef.current >= videos.length) {
+        if (accumulatedDelta < -75) {
+          accumulatedDelta = 0;
+          pickPrevCard();
+        }
+        return;
+      }
 
       if (accumulatedDelta > 35) {
         accumulatedDelta = 0;
@@ -830,7 +889,7 @@ export function StackedVideoCards({
     };
   }, [dropNextCard, pickPrevCard]);
 
-  // Keyboard navigation
+  // Keyboard navigation (Supports ArrowDown, ArrowUp, ArrowRight, ArrowLeft, Space, PageDown, PageUp)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -840,10 +899,19 @@ export function StackedVideoCards({
       ) {
         return;
       }
-      if (e.key === "ArrowDown" || e.key === "PageDown" || e.key === " ") {
+      if (
+        e.key === "ArrowDown" ||
+        e.key === "ArrowRight" ||
+        e.key === "PageDown" ||
+        e.key === " "
+      ) {
         e.preventDefault();
         dropNextCard();
-      } else if (e.key === "ArrowUp" || e.key === "PageUp") {
+      } else if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowLeft" ||
+        e.key === "PageUp"
+      ) {
         e.preventDefault();
         pickPrevCard();
       }
@@ -861,7 +929,7 @@ export function StackedVideoCards({
       {/* 3D Perspective Stage Container */}
       <div
         ref={stageRef}
-        style={{ perspective: "1250px", perspectiveOrigin: "50% 32%" }}
+        style={{ perspective: "1350px", perspectiveOrigin: "50% 28%" }}
         className="w-full h-full flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-[#050505] px-4 sm:px-6 relative overflow-hidden transition-colors duration-300"
       >
         {/* Subtle Ambient Vignette */}
@@ -875,10 +943,10 @@ export function StackedVideoCards({
           <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
         </div>
 
-        {/* Centered 3D Widescreen Cards Stack */}
+        {/* Centered 3D Widescreen Cards Stack (Enhanced Height & Aspect Ratio) */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-[940px] lg:max-w-[1060px] xl:max-w-[1140px] aspect-[16/9.3] max-h-[60vh] sm:max-h-[65vh] flex items-center justify-center mt-10 sm:mt-14"
+          className="relative w-full max-w-[980px] lg:max-w-[1100px] xl:max-w-[1200px] aspect-[16/9.8] max-h-[72vh] sm:max-h-[76vh] md:max-h-[78vh] flex items-center justify-center mt-6 sm:mt-8"
         >
           {videos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
@@ -976,11 +1044,16 @@ export function StackedVideoCards({
           })}
 
           {/* =========================================================================
-              END-OF-FEED REVEAL SCREEN
+              END-OF-FEED REVEAL SCREEN (Strictly protected z-index & visibility)
               ========================================================================= */}
           <div
             ref={endOfFeedRef}
-            className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 z-0"
+            style={{
+              zIndex: currentIndex >= videos.length ? 40 : -1,
+              pointerEvents: currentIndex >= videos.length ? "auto" : "none",
+              visibility: currentIndex >= videos.length ? "visible" : "hidden",
+            }}
+            className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 select-text"
           >
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-[0.25em] text-[#ff3c00] mb-3">
               <Sparkles className="w-3.5 h-3.5" />
@@ -1019,14 +1092,6 @@ export function StackedVideoCards({
             </div>
           </div>
         </div>
-
-        {/* Scroll Hint */}
-        {currentIndex === 0 && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[9px] font-mono tracking-widest uppercase text-neutral-500 dark:text-neutral-400 pointer-events-none opacity-60">
-            <span>Scroll or swipe</span>
-            <ChevronDown className="w-3 h-3 text-[#ff3c00]" />
-          </div>
-        )}
       </div>
     </div>
   );
