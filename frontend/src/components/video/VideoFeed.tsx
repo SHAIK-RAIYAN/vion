@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { BlocksLoader } from "@/components/ui/BlocksLoader";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { useViewMode } from "@/context/ViewModeContext";
 import { api } from "@/lib/api";
-import type { Upload, PaginationMeta } from "@/types/api";
-import { StackedVideoCards } from "./StackedVideoCards";
-import { GalleryGrid } from "./GalleryGrid";
-import { Button } from "@/components/ui/button";
-import { BlocksLoader } from "@/components/ui/BlocksLoader";
+import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import type { PaginationMeta, Upload } from "@/types/api";
+import { useGSAP } from "@gsap/react";
 import {
   AlertCircle,
   RefreshCw,
@@ -17,8 +15,10 @@ import {
   Tv,
   User,
 } from "lucide-react";
-import { useGSAP } from "@gsap/react";
-import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GalleryGrid } from "./GalleryGrid";
+import { StackedVideoCards } from "./StackedVideoCards";
 
 interface VideoFeedProps {
   searchQuery?: string;
@@ -165,7 +165,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   if (loading) {
     return (
       <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div className="relative w-full max-w-3xl sm:max-w-4xl lg:max-w-[54rem] aspect-[16/11] sm:aspect-[16/10] max-h-[68vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-12 sm:mt-20 shadow-2xl backdrop-blur-md">
+        <div className="relative w-full max-w-140 sm:max-w-[700px] md:max-w-150 lg:max-w-160 aspect-[4/3] max-h-[58vh] sm:max-h-[62vh] md:max-h-[65vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-6 sm:mt-8 shadow-2xl backdrop-blur-md">
           <div className="w-full h-11 sm:h-12 bg-neutral-100/80 dark:bg-black/60 border-b border-black/5 dark:border-white/5 px-6 flex items-center justify-between animate-pulse">
             <div className="w-24 h-3 rounded bg-neutral-300 dark:bg-white/10" />
             <div className="w-48 h-3 rounded bg-neutral-300 dark:bg-white/10" />
@@ -226,16 +226,16 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
           {searchQuery.trim()
             ? "No Matching Wallpapers"
             : activeFeed === "subscriptions"
-            ? "No Subscriptions Yet"
-            : "No Wallpapers Published"}
+              ? "No Subscriptions Yet"
+              : "No Wallpapers Published"}
         </h3>
 
         <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-xs mb-6 leading-relaxed">
           {searchQuery.trim()
             ? `No wallpapers found matching "${searchQuery}". Try a different keyword.`
             : activeFeed === "subscriptions"
-            ? "You haven't followed any creators yet. Explore the discover gallery to find inspiring creators."
-            : "Independent wallpapers will appear here once published."}
+              ? "You haven't followed any creators yet. Explore the discover gallery to find inspiring creators."
+              : "Independent wallpapers will appear here once published."}
         </p>
 
         {activeFeed === "subscriptions" ? (

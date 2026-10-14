@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useRef, useState, useEffect, useCallback, memo } from "react";
-import { useRouter } from "next/navigation";
 import { useCurtainTransition } from "@/components/transitions/CurtainTransitionContext";
-import type { Upload } from "@/types/api";
+import { Button } from "@/components/ui/button";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import Hls from "hls.js";
 import {
   Play,
   RotateCcw,
-  Sparkles,
-  ChevronDown,
+  Sparkles
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 
 interface StackedVideoCardsProps {
   videos: Upload[];
@@ -39,12 +38,12 @@ function getSlotZ(slot: number): number {
 
 function getSlotY(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -76;
-  if (slot === 2) return -142;
-  if (slot === 3) return -198;
-  if (slot === 4) return -246;
-  if (slot === 5) return -286;
-  return -318;
+  if (slot === 1) return -64;
+  if (slot === 2) return -120;
+  if (slot === 3) return -168;
+  if (slot === 4) return -208;
+  if (slot === 5) return -240;
+  return -266;
 }
 
 function getSlotScale(slot: number): number {
@@ -109,10 +108,10 @@ function parseCardDate(dateString: string) {
       dayNum === 1 || dayNum === 21 || dayNum === 31
         ? "st"
         : dayNum === 2 || dayNum === 22
-        ? "nd"
-        : dayNum === 3 || dayNum === 23
-        ? "rd"
-        : "th";
+          ? "nd"
+          : dayNum === 3 || dayNum === 23
+            ? "rd"
+            : "th";
     const day = `${dayNum}${suffix}`;
     const month = d.toLocaleDateString("en-US", { month: "short" });
     return { headerDate, year, day, month };
@@ -243,7 +242,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
             }
           }
           videoEl.muted = true;
-          videoEl.play().catch(() => {});
+          videoEl.play().catch(() => { });
         });
 
         hls.on(Hls.Events.ERROR, (_, data) => {
@@ -255,7 +254,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
       } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
         videoEl.src = videoSource.url;
         videoEl.muted = true;
-        videoEl.play().catch(() => {});
+        videoEl.play().catch(() => { });
       } else {
         setHasError(true);
       }
@@ -277,7 +276,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
       if (document.hidden) {
         videoEl.pause();
       } else if (isActive) {
-        videoEl.play().catch(() => {});
+        videoEl.play().catch(() => { });
       }
     };
 
@@ -308,9 +307,8 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         <img
           src={video.thumbnailUrl}
           alt={video.title}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 pointer-events-none ${
-            isVideoReady ? "opacity-0" : "opacity-100"
-          }`}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 pointer-events-none ${isVideoReady ? "opacity-0" : "opacity-100"
+            }`}
         />
       )}
 
@@ -327,9 +325,8 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         onPlaying={() => setIsVideoReady(true)}
         onLoadedData={() => setIsVideoReady(true)}
         onError={() => setHasError(true)}
-        className={`relative w-full h-full object-cover transition-opacity duration-700 ${
-          isVideoReady ? "opacity-100" : "opacity-0"
-        }`}
+        className={`relative w-full h-full object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-100" : "opacity-0"
+          }`}
       />
     </div>
   );
@@ -756,7 +753,7 @@ export function StackedVideoCards({
           `vion_hero_video_${video.id}`,
           JSON.stringify(video),
         );
-      } catch {}
+      } catch { }
 
       const currentIdx = currentIndexRef.current;
       const activeCard = cardsRef.current[currentIdx];
@@ -982,11 +979,10 @@ export function StackedVideoCards({
                     handleFrontCardClick(video);
                   }
                 }}
-                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
-                  index > currentIndex
+                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${index > currentIndex
                     ? "cursor-pointer hover:border-black/25 dark:hover:border-white/30"
                     : "cursor-pointer"
-                }`}
+                  }`}
               >
                 {/* 1. Slim Restrained Metadata Header (Upload Date | Title | Channel) */}
                 <div className="w-full h-10 sm:h-11 bg-white/95 dark:bg-black/90 backdrop-blur-md border-b border-black/6 dark:border-white/8 px-4 sm:px-6 flex items-center justify-between gap-3 text-xs shrink-0 z-20">
