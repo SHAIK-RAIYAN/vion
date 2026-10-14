@@ -98,7 +98,7 @@ export function VionLogo({ className = "" }: VionLogoProps) {
   );
 
   return (
-    <div className={`flex items-center select-none ${className}`}>
+    <div className={`flex items-center select-none text-neutral-900 dark:text-white ${className}`}>
       <svg
         ref={svgRef}
         viewBox="0 0 116 24"
@@ -120,8 +120,8 @@ export function VionLogo({ className = "" }: VionLogoProps) {
               dx="0"
               dy="0"
               stdDeviation="1.5"
-              floodColor="#ffffff"
-              floodOpacity="0.3"
+              floodColor="currentColor"
+              floodOpacity="0.25"
             />
           </filter>
           <filter
@@ -146,7 +146,7 @@ export function VionLogo({ className = "" }: VionLogoProps) {
         <path
           className="vion-path vion-letter-v"
           d="M 3 3.5 L 14 20.5 L 25 3.5"
-          stroke="#ffffff"
+          stroke="currentColor"
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -157,7 +157,7 @@ export function VionLogo({ className = "" }: VionLogoProps) {
         <path
           className="vion-path vion-letter-i"
           d="M 36 3.5 L 36.001 20.5"
-          stroke="#ffffff"
+          stroke="currentColor"
           strokeWidth="3.2"
           strokeLinecap="round"
           filter="url(#vion-glow)"
@@ -167,7 +167,7 @@ export function VionLogo({ className = "" }: VionLogoProps) {
         <path
           className="vion-path vion-letter-o"
           d="M 59 3.5 C 49 3.5 45 7.8 45 12 C 45 16.2 49 20.5 59 20.5 C 69 20.5 73 16.2 73 12 C 73 7.8 69 3.5 59 3.5 Z"
-          stroke="#ffffff"
+          stroke="currentColor"
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -178,7 +178,7 @@ export function VionLogo({ className = "" }: VionLogoProps) {
         <path
           className="vion-path vion-letter-n"
           d="M 83 20.5 L 83 3.5 L 100 20.5 L 100 3.5"
-          stroke="#ffffff"
+          stroke="currentColor"
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
