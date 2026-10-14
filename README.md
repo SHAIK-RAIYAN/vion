@@ -1,4 +1,4 @@
-# 🎬 Vion — Full-Stack Video Sharing Platform
+# 🎬 Vion — Full-Stack Mini Video Sharing Platform
 
 Welcome to **Vion** — an open-source, production-grade video-sharing platform built from the ground up with modern full-stack web technologies.
 

@@ -27,6 +27,7 @@ pnpm-debug.log*
 videos/
 images/
 
+docs/
 # Local agent configs
 .agents/
 skills-lock.json
