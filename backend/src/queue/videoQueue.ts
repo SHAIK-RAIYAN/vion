@@ -64,7 +64,9 @@ export async function getTranscodeJobByUploadId(
 
   try {
     const queue = getVideoQueue();
-    const job = await queue.getJob(`transcode-${uploadId}`);
+    const jobPromise = queue.getJob(`transcode-${uploadId}`);
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1200));
+    const job = await Promise.race([jobPromise, timeoutPromise]);
     return job || null;
   } catch (err: any) {
     console.warn(`[Video Queue Warning] Failed to fetch job for upload ${uploadId}:`, err.message);

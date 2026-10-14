@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../utils/AppError";
+import { isOriginAllowed } from "../index";
 
 export function errorHandler(
   error: unknown,
@@ -8,6 +9,18 @@ export function errorHandler(
   res: Response,
   next: NextFunction,
 ) {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  // Ensure CORS headers are attached on all error responses so browsers don't mask error payloads with CORS failure
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Vary", "Origin");
+  }
+
   if (error instanceof ZodError) {
     const message = error.issues.map((i) => `${i.path.join(".") || "field"}: ${i.message}`).join(", ");
     return res.status(400).json({

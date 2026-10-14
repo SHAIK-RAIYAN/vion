@@ -9,9 +9,6 @@ import cors from "cors";
 
 export const app = express();
 
-app.use(express.json());
-app.use(cookieParser());
-
 /**
  * Normalizes an origin string by trimming whitespace, removing wrapping quotes,
  * and stripping any trailing slashes.
@@ -26,7 +23,7 @@ export function normalizeOrigin(url: string): string {
 }
 
 // Build allowed origins set
-const allowedOriginsSet = new Set<string>();
+export const allowedOriginsSet = new Set<string>();
 
 // 1. Built-in development & production domains
 [
@@ -80,6 +77,10 @@ export function isOriginAllowed(origin: string | undefined): boolean {
 
   try {
     const url = new URL(normalized);
+    // Allow any localhost/127.0.0.1 development port
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      return true;
+    }
     // Allow any subdomain of raiyan.app (e.g. vion.raiyan.app, preview.raiyan.app)
     if (url.hostname === "raiyan.app" || url.hostname.endsWith(".raiyan.app")) {
       return true;
@@ -99,47 +100,44 @@ export function isOriginAllowed(origin: string | undefined): boolean {
   return false;
 }
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) {
-        return callback(null, true);
-      }
-      if (NODE_ENV !== "production") {
-        return callback(null, true);
-      }
-      console.warn(
-        `[Vion CORS] Blocked request from origin: "${origin}". Allowed origins:`,
-        Array.from(allowedOriginsSet),
-      );
-      return callback(null, false);
-    },
-    credentials: true,
-    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-      "Origin",
-      "Range",
-      "Cache-Control",
-      "Pragma",
-      "If-None-Match",
-      "If-Modified-Since",
-    ],
-    exposedHeaders: [
-      "Content-Range",
-      "X-Content-Range",
-      "ETag",
-      "Cache-Control",
-    ],
-    optionsSuccessStatus: 204,
-  }),
-);
+export const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      return callback(null, true);
+    }
+    if (NODE_ENV !== "production") {
+      return callback(null, true);
+    }
+    console.warn(
+      `[Vion CORS] Blocked request from origin: "${origin}". Allowed origins:`,
+      Array.from(allowedOriginsSet),
+    );
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  // When allowedHeaders is omitted, the cors package dynamically echoes
+  // all headers requested in Access-Control-Request-Headers, avoiding drops for custom/tracing headers.
+  exposedHeaders: [
+    "Content-Range",
+    "X-Content-Range",
+    "ETag",
+    "Cache-Control",
+  ],
+  optionsSuccessStatus: 204,
+  maxAge: 86400, // Cache preflight response in browser for 24h to avoid redundant OPTIONS requests on every poll
+};
 
+// 1. CORS is mounted FIRST so all preflight OPTIONS requests are answered immediately without body/cookie parsing
+app.use(cors(corsOptions));
+app.options("/*path", cors(corsOptions));
+
+// 2. Parse request bodies and cookies
+app.use(express.json());
+app.use(cookieParser());
+
+// 3. Mount API routes and error handler
 app.use("/api/v1", router);
-
 app.use(errorHandler);
 
 export const server = app.listen(PORT, async () => {
@@ -199,4 +197,13 @@ async function gracefulShutdown(signal: string) {
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+process.on("uncaughtException", (err) => {
+  console.error("[Vion Server Uncaught Exception]:", err?.stack || err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Vion Server Unhandled Rejection]:", reason);
+});
+
 

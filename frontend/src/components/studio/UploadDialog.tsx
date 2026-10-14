@@ -79,6 +79,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPollingRef = useRef<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check channel existence when dialog opens
@@ -111,14 +112,62 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
   // Clean up ongoing uploads and polling timers on unmount or dialog close
   const cleanup = useCallback(() => {
+    isPollingRef.current = false;
     if (xhrRef.current) {
       xhrRef.current.abort();
       xhrRef.current = null;
     }
     if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
+      clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
     }
+  }, []);
+
+  const startPollingStatus = useCallback((targetUploadId: string) => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    isPollingRef.current = true;
+
+    const poll = async () => {
+      if (!isPollingRef.current) return;
+
+      try {
+        const statusRes = await api.uploads.getStatus(targetUploadId);
+        if (!isPollingRef.current) return;
+
+        const data = statusRes.data;
+        const status = data?.status || (data as any)?.processingStatus;
+        const queue = data?.queue || null;
+
+        setProcessingStatus(status);
+        setQueueState(queue);
+
+        if (status === "COMPLETED") {
+          isPollingRef.current = false;
+          setStep("COMPLETED");
+          toast.success("Video processing complete and ready for streaming!");
+          return;
+        }
+        if (status === "FAILED") {
+          isPollingRef.current = false;
+          setStep("ERROR");
+          setErrorMessage("Video transcoding failed. Ensure the source format is valid.");
+          toast.error("Video processing failed.");
+          return;
+        }
+      } catch (err: any) {
+        // Log non-fatal polling notice and retry smoothly after interval
+        console.warn("[UploadDialog] Status poll notice:", err?.message || err);
+      }
+
+      if (isPollingRef.current) {
+        pollTimerRef.current = setTimeout(poll, 3000);
+      }
+    };
+
+    poll();
   }, []);
 
   useEffect(() => {
@@ -273,33 +322,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
       toast.success("Video uploaded to storage! Waiting for processing worker...");
 
-      // 4. Poll processing status
-      pollTimerRef.current = setInterval(async () => {
-        try {
-          const statusRes = await api.uploads.getStatus(currentUploadId);
-          const data = statusRes.data;
-          const status = data?.status || (data as any)?.processingStatus;
-          const queue = data?.queue || null;
-
-          setProcessingStatus(status);
-          setQueueState(queue);
-
-          if (status === "COMPLETED") {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setStep("COMPLETED");
-            toast.success("Video processing complete and ready for streaming!");
-          } else if (status === "FAILED") {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setStep("ERROR");
-            setErrorMessage("Video transcoding failed. Ensure the source format is valid.");
-            toast.error("Video processing failed.");
-          }
-        } catch {
-          // Ignore transient poll errors
-        }
-      }, 2500);
+      // 4. Poll processing status safely without request stacking
+      startPollingStatus(currentUploadId);
     } catch (err: any) {
       if (err.message !== "Upload cancelled by user.") {
         setStep("ERROR");
@@ -318,34 +342,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     try {
       await api.uploads.finalize(uploadId);
       toast.info("Retrying video processing finalization...");
-
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      pollTimerRef.current = setInterval(async () => {
-        try {
-          const statusRes = await api.uploads.getStatus(uploadId);
-          const data = statusRes.data;
-          const status = data?.status || (data as any)?.processingStatus;
-          const queue = data?.queue || null;
-
-          setProcessingStatus(status);
-          setQueueState(queue);
-
-          if (status === "COMPLETED") {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setStep("COMPLETED");
-            toast.success("Video processing complete and ready for streaming!");
-          } else if (status === "FAILED") {
-            clearInterval(pollTimerRef.current!);
-            pollTimerRef.current = null;
-            setStep("ERROR");
-            setErrorMessage("Video transcoding failed. Ensure the source format is valid.");
-            toast.error("Video processing failed.");
-          }
-        } catch {
-          // Ignore transient poll errors
-        }
-      }, 2500);
+      startPollingStatus(uploadId);
     } catch (err: any) {
       setStep("ERROR");
       setErrorMessage(err.message || "Failed to retry processing.");

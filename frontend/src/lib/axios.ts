@@ -70,10 +70,17 @@ export function createAxiosClient(): AxiosInstance {
     (error: AxiosError<ApiErrorEnvelope | Record<string, unknown>>) => {
       // Network failure or backend unreachable
       if (!error.response) {
+        const isLocal =
+          typeof window !== "undefined" &&
+          (window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1");
+        const defaultMsg = isLocal
+          ? "Unable to connect to Vion backend. Ensure the server is running on port 5000."
+          : "Unable to connect to Vion backend. The server may be waking up or experiencing high traffic. Please try again in a few moments.";
         return Promise.reject(
           new ApiError(
             error.message === "Network Error"
-              ? "Unable to connect to Vion backend. Ensure the server is running on port 5000."
+              ? defaultMsg
               : error.message || "Network request failed",
             0,
             "NETWORK_ERROR",

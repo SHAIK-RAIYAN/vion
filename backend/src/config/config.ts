@@ -75,7 +75,7 @@ export const STORAGE_THUMBNAILS_BUCKET = env.SUPABASE_THUMBNAILS_BUCKET || "thum
 export const STORAGE_PUBLIC_URL = env.SUPABASE_PUBLIC_URL || "";
 
 // Redis & Queue Configuration
-export const REDIS_URL = env.REDIS_URL || "redis://localhost:6379";
+export const REDIS_URL = env.REDIS_URL || (NODE_ENV === "production" ? "" : "redis://localhost:6379");
 
 // Media Processing Binaries & Dirs
 export const FFMPEG_PATH = env.FFMPEG_PATH || "ffmpeg";
@@ -106,7 +106,11 @@ export function isStorageConfigured(): boolean {
 }
 
 export function isRedisConfigured(): boolean {
-  return Boolean(REDIS_URL && REDIS_URL.startsWith("redis"));
+  if (!REDIS_URL) return false;
+  if (NODE_ENV === "production" && (REDIS_URL.includes("localhost") || REDIS_URL.includes("127.0.0.1"))) {
+    return false;
+  }
+  return REDIS_URL.startsWith("redis");
 }
 
 /**
