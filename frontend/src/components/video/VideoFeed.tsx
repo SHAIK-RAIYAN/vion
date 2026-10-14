@@ -9,6 +9,7 @@ import type { Upload, PaginationMeta } from "@/types/api";
 import { StackedVideoCards } from "./StackedVideoCards";
 import { GalleryGrid } from "./GalleryGrid";
 import { Button } from "@/components/ui/button";
+import { BlocksLoader } from "@/components/ui/BlocksLoader";
 import {
   AlertCircle,
   RefreshCw,
@@ -159,17 +160,17 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   if (loading) {
     return (
       <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div className="relative w-full max-w-5xl aspect-[16/9.5] max-h-[65vh] rounded-3xl border border-white/8 bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center animate-pulse">
-          <div className="w-full h-12 bg-black/60 border-b border-white/5 px-6 flex items-center justify-between">
+        <div className="relative w-full max-w-3xl sm:max-w-4xl lg:max-w-[54rem] aspect-[16/11] sm:aspect-[16/10] max-h-[68vh] rounded-xl sm:rounded-2xl border border-white/8 bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-12 sm:mt-20 shadow-2xl">
+          <div className="w-full h-11 sm:h-12 bg-black/60 border-b border-white/5 px-6 flex items-center justify-between animate-pulse">
             <div className="w-24 h-3 rounded bg-white/10" />
             <div className="w-48 h-3 rounded bg-white/10" />
             <div className="w-20 h-3 rounded bg-white/10" />
           </div>
           <div className="flex-1 flex flex-col items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
-              <Sparkles className="w-5 h-5 text-neutral-600 animate-spin" />
+            <div className="mb-4">
+              <BlocksLoader color="#FF3C00" />
             </div>
-            <p className="text-xs font-mono tracking-widest uppercase text-neutral-500">
+            <p className="text-xs font-mono tracking-widest uppercase text-neutral-400">
               Curating Wallpapers...
             </p>
           </div>
