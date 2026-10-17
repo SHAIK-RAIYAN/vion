@@ -72,9 +72,11 @@ export function GalleryGrid({
   );
 
   return (
-    <div ref={gridRef} className="w-full space-y-8 select-none py-2">
+    <div
+      ref={gridRef}
+      className="w-full space-y-8 select-none px-3 py-2 sm:px-5 lg:px-8">
       {/* Responsive Gallery Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {videos.map((video) => {
           const dateText = formatCardDate(video.createdAt);
           const channelName = video.channel?.channelName || "Creator";
@@ -83,8 +85,7 @@ export function GalleryGrid({
           return (
             <div
               key={video.id}
-              className="gallery-card group flex flex-col rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-neutral-950 overflow-hidden shadow-md hover:border-black/20 dark:hover:border-white/25 hover:shadow-2xl transition-all duration-300"
-            >
+              className="gallery-card group flex h-full min-w-0 w-full flex-col rounded-2xl border border-black/10 bg-white shadow-md transition-all duration-300 hover:border-black/20 hover:shadow-2xl dark:border-white/10 dark:bg-neutral-950 dark:hover:border-white/25">
               {/* Slim Metadata Header Bar */}
               <div className="h-10 bg-neutral-100/90 dark:bg-black/90 border-b border-black/5 dark:border-white/8 px-3.5 flex items-center justify-between text-xs text-neutral-900 dark:text-white shrink-0 gap-2">
                 <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 tracking-wider uppercase shrink-0">
@@ -94,8 +95,7 @@ export function GalleryGrid({
                 <CurtainLink
                   href={`/watch/${video.id}`}
                   className="font-bold text-xs tracking-wide text-neutral-900 dark:text-white truncate text-center flex-1 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors"
-                  title={video.title}
-                >
+                  title={video.title}>
                   {video.title}
                 </CurtainLink>
 
@@ -120,8 +120,7 @@ export function GalleryGrid({
               {/* Cinematic Thumbnail Preview */}
               <CurtainLink
                 href={`/watch/${video.id}`}
-                className="relative aspect-[4/3] w-full bg-black overflow-hidden group/media cursor-pointer block"
-              >
+                className="relative aspect-[4/3] w-full bg-black overflow-hidden group/media cursor-pointer block">
                 {video.thumbnailUrl ? (
                   <img
                     src={video.thumbnailUrl}
@@ -173,8 +172,7 @@ export function GalleryGrid({
             size="sm"
             disabled={loadingMore}
             onClick={onLoadMore}
-            className="rounded-full text-xs font-semibold px-6 border-black/10 dark:border-white/10 bg-neutral-100 dark:bg-neutral-900 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800"
-          >
+            className="rounded-full text-xs font-semibold px-6 border-black/10 dark:border-white/10 bg-neutral-100 dark:bg-neutral-900 text-neutral-900 dark:text-white hover:bg-neutral-200 dark:hover:bg-neutral-800">
             {loadingMore ? "Loading..." : "Load More Wallpapers"}
           </Button>
         </div>

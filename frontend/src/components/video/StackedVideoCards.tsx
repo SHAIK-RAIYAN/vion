@@ -6,11 +6,7 @@ import { gsap, prefersReducedMotion } from "@/lib/gsap";
 import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import Hls from "hls.js";
-import {
-  Play,
-  RotateCcw,
-  Sparkles
-} from "lucide-react";
+import { Play, RotateCcw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 
@@ -38,12 +34,12 @@ function getSlotZ(slot: number): number {
 
 function getSlotY(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -60;
-  if (slot === 2) return -113;
-  if (slot === 3) return -158;
-  if (slot === 4) return -196;
-  if (slot === 5) return -227;
-  return -252;
+  if (slot === 1) return -88;
+  if (slot === 2) return -165;
+  if (slot === 3) return -232;
+  if (slot === 4) return -290;
+  if (slot === 5) return -340;
+  return -383;
 }
 
 function getSlotScale(slot: number): number {
@@ -51,7 +47,7 @@ function getSlotScale(slot: number): number {
   if (slot === 1) return 0.885;
   if (slot === 2) return 0.78;
   if (slot === 3) return 0.685;
-  if (slot === 4) return 0.60;
+  if (slot === 4) return 0.6;
   if (slot === 5) return 0.52;
   return 0.45;
 }
@@ -62,7 +58,7 @@ function getSlotBrightness(slot: number): number {
   if (slot === 2) return 0.76;
   if (slot === 3) return 0.64;
   if (slot === 4) return 0.52;
-  if (slot === 5) return 0.40;
+  if (slot === 5) return 0.4;
   return 0.28;
 }
 
@@ -242,7 +238,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
             }
           }
           videoEl.muted = true;
-          videoEl.play().catch(() => { });
+          videoEl.play().catch(() => {});
         });
 
         hls.on(Hls.Events.ERROR, (_, data) => {
@@ -254,7 +250,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
       } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
         videoEl.src = videoSource.url;
         videoEl.muted = true;
-        videoEl.play().catch(() => { });
+        videoEl.play().catch(() => {});
       } else {
         setHasError(true);
       }
@@ -276,7 +272,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
       if (document.hidden) {
         videoEl.pause();
       } else if (isActive) {
-        videoEl.play().catch(() => { });
+        videoEl.play().catch(() => {});
       }
     };
 
@@ -307,8 +303,9 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         <img
           src={video.thumbnailUrl}
           alt={video.title}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 pointer-events-none ${isVideoReady ? "opacity-0" : "opacity-100"
-            }`}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 pointer-events-none ${
+            isVideoReady ? "opacity-0" : "opacity-100"
+          }`}
         />
       )}
 
@@ -325,8 +322,9 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         onPlaying={() => setIsVideoReady(true)}
         onLoadedData={() => setIsVideoReady(true)}
         onError={() => setHasError(true)}
-        className={`relative w-full h-full object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-100" : "opacity-0"
-          }`}
+        className={`relative w-full h-full object-cover transition-opacity duration-700 ${
+          isVideoReady ? "opacity-100" : "opacity-0"
+        }`}
       />
     </div>
   );
@@ -497,7 +495,11 @@ export function StackedVideoCards({
 
         // Lower the fallen card's zIndex to 0 and disable pointer events & visibility
         if (activeCard) {
-          gsap.set(activeCard, { zIndex: 0, pointerEvents: "none", visibility: "hidden" });
+          gsap.set(activeCard, {
+            zIndex: 0,
+            pointerEvents: "none",
+            visibility: "hidden",
+          });
         }
 
         if (nextIndex >= videos.length - 1 && hasNextPage && onLoadMore) {
@@ -579,11 +581,7 @@ export function StackedVideoCards({
   // Restore previous card back into stack
   const pickPrevCard = useCallback(() => {
     const fromIndex = currentIndexRef.current;
-    if (
-      isAnimating.current ||
-      isNavigatingToWatch.current ||
-      fromIndex <= 0
-    ) {
+    if (isAnimating.current || isNavigatingToWatch.current || fromIndex <= 0) {
       return;
     }
     isAnimating.current = true;
@@ -595,7 +593,11 @@ export function StackedVideoCards({
 
     // Elevate restored card to slot 0 zIndex and ensure visibility
     if (cardToRestore) {
-      gsap.set(cardToRestore, { zIndex: 50, pointerEvents: "auto", visibility: "visible" });
+      gsap.set(cardToRestore, {
+        zIndex: 50,
+        pointerEvents: "auto",
+        visibility: "visible",
+      });
     }
 
     const tl = gsap.timeline({
@@ -753,7 +755,7 @@ export function StackedVideoCards({
           `vion_hero_video_${video.id}`,
           JSON.stringify(video),
         );
-      } catch { }
+      } catch {}
 
       const currentIdx = currentIndexRef.current;
       const activeCard = cardsRef.current[currentIdx];
@@ -921,30 +923,27 @@ export function StackedVideoCards({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[calc(100vh-3.5rem)] bg-[#f8f9fa] dark:bg-[#050505] select-none overflow-hidden transition-colors duration-300"
-    >
+      className="relative w-full h-[calc(100vh-3.5rem)] bg-[#f8f9fa] dark:bg-[#050505] select-none overflow-hidden transition-colors duration-300">
       {/* 3D Perspective Stage Container */}
       <div
         ref={stageRef}
         style={{ perspective: "1350px", perspectiveOrigin: "50% 28%" }}
-        className="w-full h-full flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-[#050505] px-4 sm:px-6 relative overflow-hidden transition-colors duration-300"
-      >
+        className="w-full h-full flex flex-col items-center justify-center bg-[#f8f9fa] dark:bg-[#050505] px-4 sm:px-6 relative overflow-hidden transition-colors duration-300">
         {/* Subtle Ambient Vignette */}
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.03)_0%,transparent_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
 
         {/* Top Plumb Line With Anchor Pin */}
-        <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 decor-element">
+        <div className="absolute top-2 sm:top-4 left-1/2 -z-20 -translate-x-1/2 flex flex-col items-center pointer-events-none decor-element">
           <div className="w-2.5 h-2.5 rounded-full border border-neutral-400 dark:border-white/40 flex items-center justify-center bg-white dark:bg-black shadow-[0_0_8px_rgba(0,0,0,0.15)] dark:shadow-[0_0_8px_rgba(255,255,255,0.4)]">
             <div className="w-1 h-1 rounded-full bg-neutral-900 dark:bg-white" />
           </div>
-          <div className="w-[1px] h-10 sm:h-14 bg-gradient-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
+          <div className="w-px h-10 sm:h-14 bg-linear-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
         </div>
 
         {/* Centered 3D 4:3 Cards Stack */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-[580px] sm:max-w-[640px] md:max-w-[700px] lg:max-w-[740px] aspect-[4/3] max-h-[54vh] sm:max-h-[58vh] md:max-h-[60vh] flex items-center justify-center mt-6 sm:mt-8"
-        >
+          className="relative w-full max-w-181.25 sm:max-w-200 md:max-w-218.75 lg:max-w-231.25 aspect-4/3 max-h-[59vh] sm:max-h-[63vh] md:max-h-[67vh] flex items-center justify-center mt-6 sm:mt-8 translate-y-8 sm:translate-y-10">
           {videos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
             const channelName = video.channel?.channelName || "Cinema";
@@ -979,11 +978,11 @@ export function StackedVideoCards({
                     handleFrontCardClick(video);
                   }
                 }}
-                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${index > currentIndex
+                className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
+                  index > currentIndex
                     ? "cursor-pointer hover:border-black/25 dark:hover:border-white/30"
                     : "cursor-pointer"
-                  }`}
-              >
+                }`}>
                 {/* 1. Slim Restrained Metadata Header (Upload Date | Title | Channel) */}
                 <div className="w-full h-10 sm:h-11 bg-white/95 dark:bg-black/90 backdrop-blur-md border-b border-black/6 dark:border-white/8 px-4 sm:px-6 flex items-center justify-between gap-3 text-xs shrink-0 z-20">
                   {/* Left: Upload Date */}
@@ -1049,8 +1048,7 @@ export function StackedVideoCards({
               pointerEvents: currentIndex >= videos.length ? "auto" : "none",
               visibility: currentIndex >= videos.length ? "visible" : "hidden",
             }}
-            className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 select-text"
-          >
+            className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 select-text">
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-[0.25em] text-[#ff3c00] mb-3">
               <Sparkles className="w-3.5 h-3.5" />
               <span>VION WALLPAPER DISCOVERY</span>
@@ -1061,7 +1059,8 @@ export function StackedVideoCards({
             </h2>
 
             <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-md mx-auto mb-8 leading-relaxed font-light">
-              You&apos;ve seen every frame for now. Stay tuned as independent creators publish new high-definition live wallpapers.
+              You&apos;ve seen every frame for now. Stay tuned as independent
+              creators publish new high-definition live wallpapers.
             </p>
 
             <div className="flex items-center justify-center gap-3">
@@ -1069,8 +1068,7 @@ export function StackedVideoCards({
                 variant="outline"
                 size="sm"
                 onClick={rewindToBeginning}
-                className="rounded-full text-xs font-semibold px-6 h-9 border-black/15 dark:border-white/20 bg-black/5 dark:bg-white/5 text-neutral-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/15 gap-2 cursor-pointer"
-              >
+                className="rounded-full text-xs font-semibold px-6 h-9 border-black/15 dark:border-white/20 bg-black/5 dark:bg-white/5 text-neutral-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/15 gap-2 cursor-pointer">
                 <RotateCcw className="w-3.5 h-3.5" />
                 Rewind to Beginning
               </Button>
@@ -1080,8 +1078,7 @@ export function StackedVideoCards({
                   variant="ghost"
                   size="sm"
                   onClick={() => router.push("/")}
-                  className="rounded-full text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white px-4 h-9 cursor-pointer"
-                >
+                  className="rounded-full text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white px-4 h-9 cursor-pointer">
                   Explore All Wallpapers
                 </Button>
               )}
