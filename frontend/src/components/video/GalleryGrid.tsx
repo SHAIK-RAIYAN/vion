@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useRef } from "react";
-import { CurtainLink } from "@/components/transitions";
 import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
 import { Play, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useViewMode } from "@/context/ViewModeContext";
+import { useCurtainTransition } from "@/components/transitions/CurtainTransitionContext";
+import { animateCardToWatchPage } from "@/lib/heroTransition";
+import { useRouter } from "next/navigation";
 
 interface GalleryGridProps {
   videos: Upload[];
@@ -35,35 +38,111 @@ export function GalleryGrid({
   onLoadMore,
 }: GalleryGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { skipNextTransition } = useCurtainTransition();
+  const { getCardSnapshot, clearSnapshot } = useViewMode();
 
   useGSAP(
     () => {
       if (!gridRef.current || videos.length === 0) return;
-      if (prefersReducedMotion()) return;
+      if (prefersReducedMotion()) {
+        return;
+      }
 
-      const cards = gridRef.current.querySelectorAll(".gallery-card");
-      gsap.fromTo(
-        cards,
-        {
-          opacity: 0,
-          scale: 0.9,
-          y: 35,
-          filter: "blur(4px)",
-        },
-        {
-          opacity: 1,
-          scale: 1,
-          y: 0,
-          filter: "blur(0px)",
-          stagger: {
-            amount: 0.3,
-            from: "center",
+      const cards = gridRef.current.querySelectorAll<HTMLElement>(".gallery-card");
+      const snapshot = getCardSnapshot();
+      const hasSnapshots = Boolean(snapshot && snapshot.size > 0);
+
+      if (hasSnapshots && snapshot) {
+        // FLIP Animation: Animate each card from its stack position and large size into its grid cell!
+        const unmatchedCards: HTMLElement[] = [];
+
+        cards.forEach((cardEl, index) => {
+          const rawId = cardEl.getAttribute("data-video-card-id");
+          const baseId = rawId?.replace(/-rep-\d+$/, "");
+          const firstRect = rawId ? snapshot.get(rawId) || (baseId ? snapshot.get(baseId) : undefined) : undefined;
+
+          if (firstRect) {
+            const lastRect = cardEl.getBoundingClientRect();
+            const firstCenterX = firstRect.left + firstRect.width / 2;
+            const firstCenterY = firstRect.top + firstRect.height / 2;
+            const lastCenterX = lastRect.left + lastRect.width / 2;
+            const lastCenterY = lastRect.top + lastRect.height / 2;
+            const dx = firstCenterX - lastCenterX;
+            const dy = firstCenterY - lastCenterY;
+            const scaleMultiplier = firstRect.width / Math.max(1, lastRect.width);
+
+            gsap.set(cardEl, {
+              zIndex: Math.max(1, 40 - index),
+              position: "relative",
+              willChange: "transform, opacity",
+            });
+
+            gsap.fromTo(
+              cardEl,
+              {
+                x: dx,
+                y: dy,
+                scale: scaleMultiplier,
+                transformOrigin: "center center",
+                opacity: 1,
+              },
+              {
+                x: 0,
+                y: 0,
+                scale: 1,
+                duration: 0.82,
+                ease: "cubic",
+                clearProps: "transform,zIndex,position,willChange",
+              },
+            );
+          } else {
+            unmatchedCards.push(cardEl);
+          }
+        });
+
+        if (unmatchedCards.length > 0) {
+          gsap.fromTo(
+            unmatchedCards,
+            { opacity: 0, scale: 0.88, y: 30 },
+            {
+              opacity: 1,
+              scale: 1,
+              y: 0,
+              duration: 0.65,
+              stagger: 0.04,
+              ease: "cubic",
+              clearProps: "all",
+            },
+          );
+        }
+
+        gsap.delayedCall(0.8, clearSnapshot);
+      } else {
+        // Default initial entrance when opening grid directly
+        gsap.fromTo(
+          cards,
+          {
+            opacity: 0,
+            scale: 0.9,
+            y: 35,
+            filter: "blur(4px)",
           },
-          duration: 0.5,
-          ease: "power3.out",
-          clearProps: "all",
-        },
-      );
+          {
+            opacity: 1,
+            scale: 1,
+            y: 0,
+            filter: "blur(0px)",
+            stagger: {
+              amount: 0.3,
+              from: "center",
+            },
+            duration: 0.55,
+            ease: "power2.out",
+            clearProps: "all",
+          },
+        );
+      }
     },
     {
       dependencies: [videos.length],
@@ -85,19 +164,33 @@ export function GalleryGrid({
           return (
             <div
               key={video.id}
-              className="gallery-card group flex h-full min-w-0 w-full flex-col rounded-2xl border border-black/10 bg-white shadow-md transition-all duration-300 hover:border-black/20 hover:shadow-2xl dark:border-white/10 dark:bg-neutral-950 dark:hover:border-white/25">
+              data-video-card-id={video.id}
+              className="gallery-card group flex h-full min-w-0 w-full flex-col rounded-2xl border border-black/10 bg-white shadow-md transition-colors duration-200 hover:border-black/20 hover:shadow-2xl dark:border-white/10 dark:bg-neutral-950 dark:hover:border-white/25">
               {/* Slim Metadata Header Bar */}
               <div className="h-10 bg-neutral-100/90 dark:bg-black/90 border-b border-black/5 dark:border-white/8 px-3.5 flex items-center justify-between text-xs text-neutral-900 dark:text-white shrink-0 gap-2">
                 <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 tracking-wider uppercase shrink-0">
                   {dateText}
                 </span>
 
-                <CurtainLink
-                  href={`/watch/${video.id}`}
-                  className="font-bold text-xs tracking-wide text-neutral-900 dark:text-white truncate text-center flex-1 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors"
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const card = e.currentTarget.closest<HTMLElement>(".gallery-card");
+                    if (card) {
+                      animateCardToWatchPage({
+                        cardElement: card,
+                        video,
+                        router,
+                        skipCurtainTransition: skipNextTransition,
+                      });
+                    } else {
+                      router.push(`/watch/${video.id}`);
+                    }
+                  }}
+                  className="font-bold text-xs tracking-wide text-neutral-900 dark:text-white truncate text-center flex-1 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors cursor-pointer"
                   title={video.title}>
                   {video.title}
-                </CurtainLink>
+                </button>
 
                 <div className="flex items-center gap-1.5 shrink-0 max-w-[140px] sm:max-w-xs justify-end">
                   {video.channel?.profilePictureUrl ? (
@@ -118,9 +211,29 @@ export function GalleryGrid({
               </div>
 
               {/* Cinematic Thumbnail Preview */}
-              <CurtainLink
-                href={`/watch/${video.id}`}
-                className="relative aspect-[4/3] w-full bg-black overflow-hidden group/media cursor-pointer block">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  const card = e.currentTarget.closest<HTMLElement>(".gallery-card");
+                  if (card) {
+                    animateCardToWatchPage({
+                      cardElement: card,
+                      video,
+                      router,
+                      skipCurtainTransition: skipNextTransition,
+                    });
+                  } else {
+                    router.push(`/watch/${video.id}`);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(`/watch/${video.id}`);
+                  }
+                }}
+                className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block">
                 {video.thumbnailUrl ? (
                   <img
                     src={video.thumbnailUrl}
@@ -158,7 +271,7 @@ export function GalleryGrid({
                     {video.viewCount} views
                   </span>
                 </div>
-              </CurtainLink>
+              </div>
             </div>
           );
         })}

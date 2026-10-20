@@ -52,7 +52,7 @@ export function VideoCard({ video }: VideoCardProps) {
           {video.title}
         </CurtainLink>
 
-        <div className="flex items-center gap-1.5 shrink-0 max-w-[140px] sm:max-w-xs justify-end">
+        <div className="flex items-center gap-1.5 shrink-0 max-w-35 sm:max-w-xs justify-end">
           {video.channel?.profilePictureUrl ? (
             <img
               src={video.channel.profilePictureUrl}
@@ -73,7 +73,7 @@ export function VideoCard({ video }: VideoCardProps) {
       {/* Cinematic Preview */}
       <CurtainLink
         href={`/watch/${video.id}`}
-        className="relative aspect-[4/3] w-full bg-black overflow-hidden group/media cursor-pointer block"
+        className="relative aspect-video w-full bg-black overflow-hidden group/media cursor-pointer block"
       >
         {video.thumbnailUrl ? (
           <img

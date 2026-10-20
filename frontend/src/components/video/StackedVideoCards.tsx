@@ -1,12 +1,13 @@
 "use client";
 
 import { useCurtainTransition } from "@/components/transitions/CurtainTransitionContext";
-import { Button } from "@/components/ui/button";
+import { useViewMode } from "@/context/ViewModeContext";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { animateCardToWatchPage } from "@/lib/heroTransition";
 import type { Upload } from "@/types/api";
 import { useGSAP } from "@gsap/react";
 import Hls from "hls.js";
-import { Play, RotateCcw, Sparkles } from "lucide-react";
+import { Play } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 
@@ -24,52 +25,52 @@ interface StackedVideoCardsProps {
 // =========================================================================
 function getSlotZ(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -105;
-  if (slot === 2) return -205;
-  if (slot === 3) return -295;
-  if (slot === 4) return -375;
-  if (slot === 5) return -445;
-  return -510;
+  if (slot === 1) return -60;
+  if (slot === 2) return -115;
+  if (slot === 3) return -165;
+  if (slot === 4) return -210;
+  if (slot === 5) return -250;
+  return -290; // Slot 6
 }
 
 function getSlotY(slot: number): number {
   if (slot <= 0) return 0;
-  if (slot === 1) return -88;
-  if (slot === 2) return -165;
-  if (slot === 3) return -232;
-  if (slot === 4) return -290;
-  if (slot === 5) return -340;
-  return -383;
+  if (slot === 1) return -24;
+  if (slot === 2) return -48;
+  if (slot === 3) return -70;
+  if (slot === 4) return -92;
+  if (slot === 5) return -112;
+  return -130; // Slot 6
 }
 
 function getSlotScale(slot: number): number {
   if (slot <= 0) return 1;
-  if (slot === 1) return 0.885;
-  if (slot === 2) return 0.78;
-  if (slot === 3) return 0.685;
-  if (slot === 4) return 0.6;
-  if (slot === 5) return 0.52;
-  return 0.45;
+  if (slot === 1) return 0.92;
+  if (slot === 2) return 0.84;
+  if (slot === 3) return 0.77;
+  if (slot === 4) return 0.70;
+  if (slot === 5) return 0.64;
+  return 0.58; // Slot 6
 }
 
 function getSlotBrightness(slot: number): number {
   if (slot <= 0) return 1;
-  if (slot === 1) return 0.88;
-  if (slot === 2) return 0.76;
-  if (slot === 3) return 0.64;
-  if (slot === 4) return 0.52;
-  if (slot === 5) return 0.4;
-  return 0.28;
+  if (slot === 1) return 0.90;
+  if (slot === 2) return 0.80;
+  if (slot === 3) return 0.70;
+  if (slot === 4) return 0.58;
+  if (slot === 5) return 0.46;
+  return 0.32;
 }
 
 function getSlotBlur(slot: number): number {
   if (slot <= 0) return 0;
   if (slot === 1) return 0;
-  if (slot === 2) return 0.4;
-  if (slot === 3) return 0.8;
-  if (slot === 4) return 1.2;
-  if (slot === 5) return 1.6;
-  return 2.0;
+  if (slot === 2) return 0.3;
+  if (slot === 3) return 0.7;
+  if (slot === 4) return 1.1;
+  if (slot === 5) return 1.5;
+  return 2.2;
 }
 
 function getSlotOpacity(slot: number): number {
@@ -77,10 +78,10 @@ function getSlotOpacity(slot: number): number {
   if (slot === 0) return 1;
   if (slot === 1) return 0.98;
   if (slot === 2) return 0.94;
-  if (slot === 3) return 0.85;
-  if (slot === 4) return 0.72;
-  if (slot === 5) return 0.58;
-  return 0;
+  if (slot === 3) return 0.88;
+  if (slot === 4) return 0.75;
+  if (slot === 5) return 0.60;
+  return 0; // Slot 6 begins hidden until ascending into stack
 }
 
 function parseCardDate(dateString: string) {
@@ -171,7 +172,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
           : { type: "mp4" as const, url: stream_480.url };
       }
 
-      // 4. Fallback: 360p or lower (strictly avoiding 1080p, 1440p, or 4K)
+      // 4. Fallback: 360p or lower (strictly avoiding 1080p, 1440p, or 4K if lower versions exist)
       const nonHd = video.videos.find(
         (r) =>
           r.resolution !== "1080p" &&
@@ -183,6 +184,14 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         return nonHd.url.endsWith(".m3u8")
           ? { type: "hls" as const, url: nonHd.url }
           : { type: "mp4" as const, url: nonHd.url };
+      }
+
+      // 5. Fallback: Original source rendition (when transcoding is deferred)
+      if (video.videos[0]?.url) {
+        const first = video.videos[0];
+        return first.url.endsWith(".m3u8")
+          ? { type: "hls" as const, url: first.url }
+          : { type: "mp4" as const, url: first.url };
       }
     }
 
@@ -341,404 +350,519 @@ export function StackedVideoCards({
 }: StackedVideoCardsProps) {
   const router = useRouter();
   const { skipNextTransition } = useCurtainTransition();
+  const { getCardSnapshot, clearSnapshot } = useViewMode();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const endOfFeedRef = useRef<HTMLDivElement>(null);
+
+  // 1. Virtual circular conveyor ring:
+  // Ensures at least 8 distinct items exist in 3D depth space (slots 0..6 + offscreen buffer)
+  // so infinite wrap-around never collides or runs out of behind cards
+  const displayVideos = React.useMemo(() => {
+    if (!videos || videos.length === 0) return [];
+    if (videos.length >= 8) return videos;
+
+    const result: Upload[] = [];
+    let copyIndex = 0;
+    while (result.length < 8) {
+      for (const v of videos) {
+        result.push(
+          copyIndex === 0 ? v : { ...v, id: `${v.id}-rep-${copyIndex}` },
+        );
+      }
+      copyIndex++;
+    }
+    return result;
+  }, [videos]);
+
+  // Resolves cloned/repeated video back to the original database video
+  const getOriginalVideo = useCallback(
+    (video: Upload): Upload => {
+      const originalId = video.id.replace(/-rep-\d+$/, "");
+      const found = videos.find((v) => v.id === originalId);
+      return found || video;
+    },
+    [videos],
+  );
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentIndexRef = useRef(0);
   const isAnimating = useRef(false);
+  const gestureLocked = useRef(false);
+  const gestureUnlockTimer = useRef<NodeJS.Timeout | undefined>(undefined);
   const isNavigatingToWatch = useRef(false);
+
+  // Velocity tracking & delta handling
+  const accumulatedDelta = useRef(0);
+  const deltaResetTimer = useRef<NodeJS.Timeout | undefined>(undefined);
+
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
 
-  // Keep ref synchronized with state to prevent stale closure issues during rapid scroll
+  // Synchronize ref with state
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
-
-  // Reset index only if the underlying videos list actually changes
-  const prevVideosRef = useRef(videos);
-  useEffect(() => {
-    if (prevVideosRef.current !== videos) {
-      prevVideosRef.current = videos;
-      if (currentIndexRef.current >= videos.length) {
-        const clamped = Math.max(0, videos.length - 1);
-        setCurrentIndex(clamped);
-        currentIndexRef.current = clamped;
-      }
-    }
-  }, [videos]);
 
   const setCardRef = (index: number) => (el: HTMLDivElement | null) => {
     cardsRef.current[index] = el;
   };
 
+  // Helper: Positions card according to its slot in 3D
+  const applySlotTransform = useCallback((cardEl: HTMLElement, slot: number) => {
+    gsap.set(cardEl, {
+      x: 0,
+      z: getSlotZ(slot),
+      y: getSlotY(slot),
+      scale: getSlotScale(slot),
+      opacity: getSlotOpacity(slot),
+      filter: `brightness(${getSlotBrightness(slot)}) blur(${getSlotBlur(slot)}px)`,
+      zIndex: Math.max(1, 50 - slot),
+      transformOrigin: "center top",
+      force3D: true,
+      visibility: slot <= 5 ? "visible" : "hidden",
+      pointerEvents: slot === 0 ? "auto" : slot <= 4 ? "auto" : "none",
+    });
+  }, []);
+
+  // Maximum number of visible cards in 3D stack (capped by number of database videos, max 5)
+  const maxStackSlots = Math.min(
+    displayVideos.length,
+    Math.max(3, Math.min(videos.length, 5)),
+  );
+  const backSlot = maxStackSlots - 1;
+
   // =========================================================================
-  // GSAP INITIAL ENTRANCE: Cascading forward from depth in 3D space
+  // GSAP INITIAL ENTRANCE: Cascading forward from depth or FLIP from previous view
   // =========================================================================
   useGSAP(
     () => {
-      if (videos.length === 0) return;
+      if (displayVideos.length === 0) return;
       const reducedMotion = prefersReducedMotion();
+      const N = displayVideos.length;
 
       if (reducedMotion) {
         cardsRef.current.forEach((cardEl, i) => {
           if (!cardEl) return;
-          gsap.set(cardEl, {
-            z: getSlotZ(i),
-            y: getSlotY(i),
-            scale: getSlotScale(i),
-            opacity: getSlotOpacity(i),
-            filter: `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
-            zIndex: Math.max(1, 50 - i),
-            transformOrigin: "center top",
-            force3D: true,
-          });
+          const relSlot = (i - (currentIndexRef.current % N) + N) % N;
+          if (relSlot < maxStackSlots) {
+            applySlotTransform(cardEl, relSlot);
+          } else {
+            gsap.set(cardEl, {
+              y: "130vh",
+              opacity: 0,
+              visibility: "hidden",
+              pointerEvents: "none",
+            });
+          }
         });
         return;
       }
 
-      // Initial placement deep in z-space with strict initial zIndex
-      cardsRef.current.forEach((cardEl, i) => {
-        if (!cardEl) return;
-        gsap.set(cardEl, {
-          z: getSlotZ(i) - 450,
-          y: getSlotY(i) + 40,
-          scale: getSlotScale(i) * 0.82,
-          opacity: 0,
-          filter: `brightness(${getSlotBrightness(i) * 0.6}) blur(8px)`,
-          zIndex: Math.max(1, 50 - i),
-          transformOrigin: "center top",
-          force3D: true,
-        });
-      });
+      // Check if we have snapshot positions from previous view (e.g. Grid view)
+      const snapshot = getCardSnapshot();
+      const hasSnapshots = Boolean(snapshot && snapshot.size > 0);
 
-      if (endOfFeedRef.current) {
-        gsap.set(endOfFeedRef.current, {
-          autoAlpha: 0,
-          scale: 0.95,
-          y: 25,
+      if (hasSnapshots && snapshot) {
+        // FLIP ANIMATION: Animate cards from their previous grid positions & sizes into the 3D stack!
+        cardsRef.current.forEach((cardEl, i) => {
+          if (!cardEl || i >= displayVideos.length) return;
+          const video = displayVideos[i];
+          const rawId = video.id;
+          const baseId = rawId.replace(/-rep-\d+$/, "");
+          const firstRect = snapshot.get(rawId) || snapshot.get(baseId);
+          const relSlot = (i - (currentIndexRef.current % N) + N) % N;
+
+          if (relSlot < maxStackSlots && firstRect) {
+            // Temporarily position card at natural (0, 0, 0) to measure coordinates
+            gsap.set(cardEl, {
+              x: 0,
+              y: 0,
+              z: 0,
+              scale: 1,
+              transformOrigin: "center center",
+              zIndex: Math.max(1, 50 - relSlot),
+              visibility: "visible",
+              pointerEvents: "auto",
+              willChange: "transform, opacity",
+            });
+
+            const naturalRect = cardEl.getBoundingClientRect();
+            const cardCenterX = naturalRect.left + naturalRect.width / 2;
+            const cardCenterY = naturalRect.top + naturalRect.height / 2;
+            const firstCenterX = firstRect.left + firstRect.width / 2;
+            const firstCenterY = firstRect.top + firstRect.height / 2;
+            const dx = firstCenterX - cardCenterX;
+            const dy = firstCenterY - cardCenterY;
+            const scaleMultiplier = firstRect.width / Math.max(1, naturalRect.width);
+
+            gsap.fromTo(
+              cardEl,
+              {
+                x: dx,
+                y: dy,
+                z: 0,
+                scale: scaleMultiplier,
+                opacity: 1,
+                filter: "brightness(1) blur(0px)",
+                transformOrigin: "center center",
+                force3D: true,
+              },
+              {
+                x: 0,
+                y: getSlotY(relSlot),
+                z: getSlotZ(relSlot),
+                scale: getSlotScale(relSlot),
+                opacity: getSlotOpacity(relSlot),
+                filter: `brightness(${getSlotBrightness(relSlot)}) blur(${getSlotBlur(relSlot)}px)`,
+                duration: 0.82,
+                ease: "cubic",
+                force3D: true,
+                onComplete: () => {
+                  applySlotTransform(cardEl, relSlot);
+                },
+              },
+            );
+          } else if (relSlot < maxStackSlots) {
+            applySlotTransform(cardEl, relSlot);
+            gsap.fromTo(
+              cardEl,
+              { opacity: 0, scale: getSlotScale(relSlot) * 0.8 },
+              {
+                opacity: getSlotOpacity(relSlot),
+                scale: getSlotScale(relSlot),
+                duration: 0.65,
+                ease: "cubic",
+              },
+            );
+          } else {
+            gsap.set(cardEl, {
+              y: "130vh",
+              opacity: 0,
+              visibility: "hidden",
+              pointerEvents: "none",
+            });
+          }
         });
+
+        gsap.delayedCall(0.85, clearSnapshot);
+      } else {
+        // Default initial cascade: cards cascade forward from deep in z-space with cubic ease
+        cardsRef.current.forEach((cardEl, i) => {
+          if (!cardEl) return;
+          const relSlot = (i - (currentIndexRef.current % N) + N) % N;
+          if (relSlot < maxStackSlots) {
+            gsap.set(cardEl, {
+              z: getSlotZ(relSlot) - 300,
+              y: getSlotY(relSlot) + 35,
+              scale: getSlotScale(relSlot) * 0.82,
+              opacity: 0,
+              filter: `brightness(${getSlotBrightness(relSlot) * 0.5}) blur(6px)`,
+              zIndex: Math.max(1, 50 - relSlot),
+              transformOrigin: "center top",
+              force3D: true,
+            });
+          } else {
+            gsap.set(cardEl, {
+              y: "130vh",
+              opacity: 0,
+              visibility: "hidden",
+              pointerEvents: "none",
+            });
+          }
+        });
+
+        const tl = gsap.timeline({
+          defaults: { ease: "cubic" },
+          onComplete: () => {
+            isAnimating.current = false;
+          },
+        });
+
+        const visibleCards = cardsRef.current.filter((_, i) => {
+          const relSlot = (i - (currentIndexRef.current % N) + N) % N;
+          return relSlot < maxStackSlots;
+        });
+
+        tl.to(visibleCards, {
+          z: (i) => getSlotZ(i),
+          y: (i) => getSlotY(i),
+          scale: (i) => getSlotScale(i),
+          opacity: (i) => getSlotOpacity(i),
+          filter: (i) =>
+            `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
+          duration: 0.95,
+          stagger: 0.07,
+        });
+
+        tl.fromTo(
+          ".decor-element",
+          { opacity: 0, y: -6 },
+          { opacity: 1, y: 0, duration: 0.7, ease: "cubic", stagger: 0.05 },
+          0.2,
+        );
       }
 
-      // Timeline for cascading appear animation
-      const tl = gsap.timeline({
-        defaults: { ease: "power3.out" },
-        onComplete: () => {
-          isAnimating.current = false;
-        },
-      });
-
-      // Front cards cascade forward into their slots
-      tl.to(cardsRef.current.slice(0, 7), {
-        z: (i) => getSlotZ(i),
-        y: (i) => getSlotY(i),
-        scale: (i) => getSlotScale(i),
-        opacity: (i) => getSlotOpacity(i),
-        filter: (i) =>
-          `brightness(${getSlotBrightness(i)}) blur(${getSlotBlur(i)}px)`,
-        duration: 1.1,
-        stagger: 0.08,
-      });
-
-      // Plumb line anchor pin fades in smoothly
-      tl.fromTo(
-        ".decor-element",
-        { opacity: 0, y: -6 },
-        { opacity: 1, y: 0, duration: 0.75, ease: "power2.out", stagger: 0.05 },
-        0.3,
-      );
-
-      setCurrentIndex(0);
-      currentIndexRef.current = 0;
       isAnimating.current = false;
       isNavigatingToWatch.current = false;
     },
     {
-      dependencies: [videos.length],
+      dependencies: [displayVideos.length, maxStackSlots],
       scope: containerRef,
-      revertOnUpdate: true,
     },
   );
 
   // =========================================================================
-  // CARD DROP & DEPTH PROGRESSION (Guaranteed Front-Card Drop)
+  // CARD DROP & CONVEYOR PROGRESSION (INFINITE LOOP WITH BACKSIDE ASCENSION)
+  // Front card drops down (130vh) while backside card ascends up from bottom to top (joining the set)
+  // All with smooth ease-in and ease-out ("power2.inOut") and controlled velocity
   // =========================================================================
-  const dropNextCard = useCallback(() => {
-    const fromIndex = currentIndexRef.current;
-    if (
-      isAnimating.current ||
-      isNavigatingToWatch.current ||
-      fromIndex >= videos.length
-    ) {
-      return;
-    }
-    isAnimating.current = true;
+  const dropNextCard = useCallback(
+    (customDuration?: number) => {
+      const N = displayVideos.length;
+      if (N === 0 || isAnimating.current || gestureLocked.current || isNavigatingToWatch.current) return;
+      isAnimating.current = true;
+      gestureLocked.current = true;
+      accumulatedDelta.current = 0;
+      clearTimeout(gestureUnlockTimer.current);
 
-    const reducedMotion = prefersReducedMotion();
-    const nextIndex = fromIndex + 1;
-    const activeCard = cardsRef.current[fromIndex];
-    const duration = reducedMotion ? 0.2 : 0.75;
+      const fromIndex = currentIndexRef.current;
+      const nextIndex = (fromIndex + 1) % N;
+      const reducedMotion = prefersReducedMotion();
+      const duration = customDuration ?? (reducedMotion ? 0.2 : 0.82);
 
-    // 1. Immediately elevate the active front card so it strictly stays on top while falling down
-    if (activeCard) {
-      gsap.set(activeCard, { zIndex: 60 });
-    }
+      const activeCard = cardsRef.current[fromIndex];
 
-    const tl = gsap.timeline({
-      onComplete: () => {
-        currentIndexRef.current = nextIndex;
-        setCurrentIndex(nextIndex);
+      // 1. Elevate active front card so it strictly stays on top while plunging down
+      if (activeCard) {
+        gsap.set(activeCard, { zIndex: 60, pointerEvents: "none" });
+      }
 
-        // Lower the fallen card's zIndex to 0 and disable pointer events & visibility
-        if (activeCard) {
-          gsap.set(activeCard, {
-            zIndex: 0,
-            pointerEvents: "none",
-            visibility: "hidden",
-          });
-        }
+      // 2. Prepare the backside birth card before timeline begins
+      // It starts at the bottom behind the stack and rises upwards into backSlot
+      const birthIndex = (fromIndex + maxStackSlots) % N;
+      const birthCard = cardsRef.current[birthIndex];
+      if (birthCard) {
+        gsap.set(birthCard, {
+          z: getSlotZ(backSlot) - 35,
+          y: getSlotY(backSlot) + 65,
+          scale: getSlotScale(backSlot) * 0.9,
+          opacity: 0,
+          filter: `brightness(${getSlotBrightness(backSlot) * 0.4}) blur(3px)`,
+          zIndex: Math.max(1, 50 - backSlot),
+          visibility: "visible",
+          pointerEvents: "none",
+        });
+      }
 
-        if (nextIndex >= videos.length - 1 && hasNextPage && onLoadMore) {
-          onLoadMore();
-        }
+      const tl = gsap.timeline({
+        onComplete: () => {
+          currentIndexRef.current = nextIndex;
+          setCurrentIndex(nextIndex);
 
-        setTimeout(() => {
+          // Park fallen card offscreen
+          if (activeCard) {
+            gsap.set(activeCard, {
+              zIndex: 0,
+              pointerEvents: "none",
+              visibility: "hidden",
+              y: "130vh",
+              opacity: 0,
+            });
+          }
+
+          // Trigger pagination if nearing end of original feed
+          if (nextIndex >= videos.length - 3 && hasNextPage && onLoadMore) {
+            onLoadMore();
+          }
+
           isAnimating.current = false;
-        }, 80);
-      },
-    });
+          gestureUnlockTimer.current = setTimeout(() => {
+            gestureLocked.current = false;
+          }, 120);
+        },
+      });
 
-    // 2. Front card falls down straight out of screen
-    if (activeCard) {
-      tl.to(
-        activeCard,
-        {
+      // 3. Front card plunges down out of screen with trademark Codegrid cubic curve
+      if (activeCard) {
+        tl.to(
+          activeCard,
+          {
+            y: "130vh",
+            z: 0,
+            scale: 1.05,
+            opacity: 0,
+            duration,
+            ease: "cubic",
+          },
+          0,
+        );
+      }
+
+      // 4. Middle cards advance forward in 3D depth with cubic curve
+      for (let step = 1; step <= backSlot; step++) {
+        const cardIdx = (fromIndex + step) % N;
+        const cardEl = cardsRef.current[cardIdx];
+        if (!cardEl) continue;
+        const targetSlot = step - 1;
+
+        gsap.set(cardEl, {
+          zIndex: Math.max(1, 50 - targetSlot),
+          pointerEvents: targetSlot === 0 ? "auto" : "auto",
+          visibility: "visible",
+        });
+
+        tl.to(
+          cardEl,
+          {
+            z: getSlotZ(targetSlot),
+            y: getSlotY(targetSlot),
+            scale: getSlotScale(targetSlot),
+            opacity: getSlotOpacity(targetSlot),
+            filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
+            duration,
+            ease: "cubic",
+          },
+          0,
+        );
+      }
+
+      // 5. Backside card ascends up from bottom to top joining the set behind the last card!
+      // Slated with a subtle 0.12s offset exactly matching Codegrid Directory animation
+      if (birthCard) {
+        tl.to(
+          birthCard,
+          {
+            z: getSlotZ(backSlot),
+            y: getSlotY(backSlot),
+            scale: getSlotScale(backSlot),
+            opacity: getSlotOpacity(backSlot),
+            filter: `brightness(${getSlotBrightness(backSlot)}) blur(${getSlotBlur(backSlot)}px)`,
+            duration: Math.max(0.45, duration - 0.08),
+            ease: "cubic",
+          },
+          0.12,
+        );
+      }
+    },
+    [backSlot, displayVideos.length, hasNextPage, maxStackSlots, onLoadMore, videos.length],
+  );
+
+  // =========================================================================
+  // CARD PICK / REVERSE SCROLL (INFINITE LOOP IN UPWARD DIRECTION)
+  // Bottom card rises into Slot 0 while backside card recedes from top to bottom
+  // =========================================================================
+  const pickPrevCard = useCallback(
+    (customDuration?: number) => {
+      const N = displayVideos.length;
+      if (N === 0 || isAnimating.current || gestureLocked.current || isNavigatingToWatch.current) return;
+      isAnimating.current = true;
+      gestureLocked.current = true;
+      accumulatedDelta.current = 0;
+      clearTimeout(gestureUnlockTimer.current);
+
+      const fromIndex = currentIndexRef.current;
+      const prevIndex = (fromIndex - 1 + N) % N;
+      const reducedMotion = prefersReducedMotion();
+      const duration = customDuration ?? (reducedMotion ? 0.2 : 0.82);
+
+      // Card to restore: the card right before current front card
+      const cardToRestore = cardsRef.current[prevIndex];
+
+      if (cardToRestore) {
+        gsap.set(cardToRestore, {
           y: "130vh",
           z: 0,
-          rotation: 0,
-          scale: 1,
-          opacity: 1,
-          duration,
-          ease: "power2.inOut",
-        },
-        0,
-      );
-    }
+          scale: 1.05,
+          opacity: 0,
+          zIndex: 60,
+          pointerEvents: "auto",
+          visibility: "visible",
+        });
+      }
 
-    // 3. All subsequent cards advance forward by one slot in 3D
-    for (let j = nextIndex; j < videos.length; j++) {
-      const nextCard = cardsRef.current[j];
-      if (!nextCard) continue;
-      const targetSlot = j - nextIndex;
-
-      // Update z-index dynamically: Slot 0 gets 50, slot 1 gets 49, etc.
-      gsap.set(nextCard, {
-        zIndex: Math.max(1, 50 - targetSlot),
-        pointerEvents: "auto",
-        visibility: "visible",
-      });
-
-      tl.to(
-        nextCard,
-        {
-          z: getSlotZ(targetSlot),
-          y: getSlotY(targetSlot),
-          scale: getSlotScale(targetSlot),
-          opacity: getSlotOpacity(targetSlot),
-          filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
-          duration,
-          ease: "power2.inOut",
-        },
-        0,
-      );
-    }
-
-    // 4. Reveal End of Feed screen ONLY if all cards have fallen
-    if (nextIndex >= videos.length && endOfFeedRef.current) {
-      gsap.set(endOfFeedRef.current, {
-        zIndex: 40,
-        pointerEvents: "auto",
-        visibility: "visible",
-      });
-      tl.to(
-        endOfFeedRef.current,
-        {
-          autoAlpha: 1,
-          scale: 1,
-          y: 0,
-          duration: 0.75,
-          ease: "power2.out",
-        },
-        0.15,
-      );
-    }
-  }, [videos.length, hasNextPage, onLoadMore]);
-
-  // Restore previous card back into stack
-  const pickPrevCard = useCallback(() => {
-    const fromIndex = currentIndexRef.current;
-    if (isAnimating.current || isNavigatingToWatch.current || fromIndex <= 0) {
-      return;
-    }
-    isAnimating.current = true;
-
-    const reducedMotion = prefersReducedMotion();
-    const prevIndex = fromIndex - 1;
-    const cardToRestore = cardsRef.current[prevIndex];
-    const duration = reducedMotion ? 0.2 : 0.75;
-
-    // Elevate restored card to slot 0 zIndex and ensure visibility
-    if (cardToRestore) {
-      gsap.set(cardToRestore, {
-        zIndex: 50,
-        pointerEvents: "auto",
-        visibility: "visible",
-      });
-    }
-
-    const tl = gsap.timeline({
-      onComplete: () => {
-        currentIndexRef.current = prevIndex;
-        setCurrentIndex(prevIndex);
-        setTimeout(() => {
+      const tl = gsap.timeline({
+        onComplete: () => {
+          currentIndexRef.current = prevIndex;
+          setCurrentIndex(prevIndex);
           isAnimating.current = false;
-        }, 80);
-      },
-    });
-
-    if (fromIndex >= videos.length && endOfFeedRef.current) {
-      tl.to(
-        endOfFeedRef.current,
-        {
-          autoAlpha: 0,
-          scale: 0.95,
-          y: 20,
-          duration: 0.35,
-          ease: "power2.in",
-          onComplete: () => {
-            if (endOfFeedRef.current) {
-              gsap.set(endOfFeedRef.current, {
-                zIndex: -1,
-                pointerEvents: "none",
-                visibility: "hidden",
-              });
-            }
-          },
+          gestureUnlockTimer.current = setTimeout(() => {
+            gestureLocked.current = false;
+          }, 120);
         },
-        0,
-      );
-    }
-
-    // 1. Previous card returns up into Slot 0
-    if (cardToRestore) {
-      tl.to(
-        cardToRestore,
-        {
-          z: getSlotZ(0),
-          y: getSlotY(0),
-          scale: getSlotScale(0),
-          opacity: getSlotOpacity(0),
-          filter: `brightness(${getSlotBrightness(0)}) blur(${getSlotBlur(0)}px)`,
-          duration,
-          ease: "power2.inOut",
-        },
-        0,
-      );
-    }
-
-    // 2. Subsequent cards push back by one slot in 3D
-    for (let j = fromIndex; j < videos.length; j++) {
-      const cardEl = cardsRef.current[j];
-      if (!cardEl) continue;
-      const targetSlot = j - prevIndex;
-
-      gsap.set(cardEl, {
-        zIndex: Math.max(1, 50 - targetSlot),
-        pointerEvents: "auto",
-        visibility: "visible",
       });
 
-      tl.to(
-        cardEl,
-        {
-          z: getSlotZ(targetSlot),
-          y: getSlotY(targetSlot),
-          scale: getSlotScale(targetSlot),
-          opacity: getSlotOpacity(targetSlot),
-          filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
-          duration,
-          ease: "power2.inOut",
-        },
-        0,
-      );
-    }
-  }, [videos.length]);
-
-  // Rewind to beginning action
-  const rewindToBeginning = () => {
-    if (isAnimating.current) return;
-    isAnimating.current = true;
-
-    const tl = gsap.timeline({
-      onComplete: () => {
-        setCurrentIndex(0);
-        currentIndexRef.current = 0;
-        isAnimating.current = false;
-      },
-    });
-
-    if (endOfFeedRef.current) {
-      tl.to(
-        endOfFeedRef.current,
-        {
-          autoAlpha: 0,
-          scale: 0.95,
-          y: 20,
-          duration: 0.3,
-          onComplete: () => {
-            if (endOfFeedRef.current) {
-              gsap.set(endOfFeedRef.current, {
-                zIndex: -1,
-                pointerEvents: "none",
-                visibility: "hidden",
-              });
-            }
+      // 1. Previous card sweeps up from bottom into Slot 0
+      if (cardToRestore) {
+        tl.to(
+          cardToRestore,
+          {
+            z: getSlotZ(0),
+            y: getSlotY(0),
+            scale: getSlotScale(0),
+            opacity: getSlotOpacity(0),
+            filter: `brightness(${getSlotBrightness(0)}) blur(${getSlotBlur(0)}px)`,
+            duration,
+            ease: "cubic",
           },
-        },
-        0,
-      );
-    }
+          0,
+        );
+      }
 
-    cardsRef.current.forEach((cardEl, i) => {
-      if (!cardEl) return;
-      const targetSlot = i;
-      gsap.set(cardEl, {
-        zIndex: Math.max(1, 50 - targetSlot),
-        pointerEvents: "auto",
-        visibility: "visible",
-      });
-      tl.to(
-        cardEl,
-        {
-          z: getSlotZ(targetSlot),
-          y: getSlotY(targetSlot),
-          scale: getSlotScale(targetSlot),
-          opacity: getSlotOpacity(targetSlot),
-          filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
-          duration: 0.7,
-          ease: "power2.inOut",
-        },
-        0.03 * i,
-      );
-    });
-  };
+      // 2. Existing cards recede backward into depth with cubic curve
+      for (let step = 0; step < backSlot; step++) {
+        const cardIdx = (fromIndex + step) % N;
+        const cardEl = cardsRef.current[cardIdx];
+        if (!cardEl) continue;
+        const targetSlot = step + 1;
+
+        gsap.set(cardEl, {
+          zIndex: Math.max(1, 50 - targetSlot),
+          pointerEvents: targetSlot === 0 ? "auto" : "auto",
+          visibility: "visible",
+        });
+
+        tl.to(
+          cardEl,
+          {
+            z: getSlotZ(targetSlot),
+            y: getSlotY(targetSlot),
+            scale: getSlotScale(targetSlot),
+            opacity: getSlotOpacity(targetSlot),
+            filter: `brightness(${getSlotBrightness(targetSlot)}) blur(${getSlotBlur(targetSlot)}px)`,
+            duration,
+            ease: "cubic",
+          },
+          0,
+        );
+      }
+
+      // 3. Backmost card in backSlot recedes down and backward into depth
+      const backIdx = (fromIndex + backSlot) % N;
+      const backCard = cardsRef.current[backIdx];
+      if (backCard) {
+        tl.to(
+          backCard,
+          {
+            z: getSlotZ(backSlot) - 35,
+            y: getSlotY(backSlot) + 65,
+            scale: getSlotScale(backSlot) * 0.9,
+            opacity: 0,
+            filter: `brightness(${getSlotBrightness(backSlot) * 0.4}) blur(3px)`,
+            duration: Math.max(0.45, duration - 0.08),
+            ease: "cubic",
+          },
+          0,
+        );
+      }
+    },
+    [backSlot, displayVideos.length],
+  );
 
   // =========================================================================
   // SEAMLESS HERO CLICK-TO-WATCH TRANSITION
+  // Animates front card to the exact position and size of /watch player before navigation
   // =========================================================================
   const handleFrontCardClick = useCallback(
     (video: Upload) => {
@@ -746,117 +870,85 @@ export function StackedVideoCards({
       isNavigatingToWatch.current = true;
       isAnimating.current = true;
 
-      // 1. Tell curtain transition system not to trigger the wipe
       skipNextTransition();
 
-      // 2. Cache video data in sessionStorage for instant watch page mount
-      try {
-        sessionStorage.setItem(
-          `vion_hero_video_${video.id}`,
-          JSON.stringify(video),
-        );
-      } catch {}
+      const activeIdx = currentIndexRef.current;
+      const activeCard = cardsRef.current[activeIdx];
+      const otherCards = cardsRef.current.filter((_, idx) => idx !== activeIdx);
 
-      const currentIdx = currentIndexRef.current;
-      const activeCard = cardsRef.current[currentIdx];
-      const otherCards = cardsRef.current.filter(
-        (_, idx) => idx !== currentIdx,
-      );
-
-      const tl = gsap.timeline({
-        onComplete: () => {
-          router.push(`/watch/${video.id}`);
-        },
+      // Smoothly fade out remaining cards and stage decor with ease-in-and-out
+      gsap.to([otherCards, ".decor-element"], {
+        opacity: 0,
+        scale: 0.94,
+        y: "+=12",
+        duration: 0.38,
+        ease: "power2.inOut",
       });
 
-      // 3. Smoothly fade out remaining cards and stage decor
-      tl.to(
-        [otherCards, ".decor-element"],
-        {
-          opacity: 0,
-          scale: 0.94,
-          y: "+=12",
-          duration: 0.38,
-          ease: "power2.inOut",
-        },
-        0,
-      );
-
-      // 4. Hero card remains on screen and expands smoothly
       if (activeCard) {
-        tl.to(
-          activeCard,
-          {
-            scale: 1.035,
-            duration: 0.42,
-            ease: "power2.out",
-          },
-          0,
-        );
+        animateCardToWatchPage({
+          cardElement: activeCard,
+          video: getOriginalVideo(video),
+          router,
+          skipCurtainTransition: skipNextTransition,
+        });
+      } else {
+        router.push(`/watch/${getOriginalVideo(video).id}`);
       }
     },
-    [router, skipNextTransition],
+    [getOriginalVideo, router, skipNextTransition],
   );
 
   // =========================================================================
-  // GESTURE & INPUT LISTENERS
+  // GESTURE & INPUT LISTENERS: CONTROLLED SENSITIVITY & VELOCITY ACCELERATION
+  // Exactly ONE card per intentional scroll stroke; faster flick speeds up duration
   // =========================================================================
-  // Wheel / Scroll gesture
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
 
-    let accumulatedDelta = 0;
-    let deltaResetTimer: NodeJS.Timeout;
-
     const handleWheel = (e: WheelEvent) => {
-      // 1. Critical: Ignore zoom gestures (Ctrl/Meta + wheel, trackpad pinch)
-      if (e.ctrlKey || e.metaKey) {
-        return;
-      }
-
-      if (isAnimating.current) return;
-
-      // 2. When at the end of the feed, lock further downward scroll completely
-      if (currentIndexRef.current >= videos.length) {
-        if (e.deltaY > 0) return;
-      }
-
+      if (e.ctrlKey || e.metaKey) return;
       e.preventDefault();
 
-      accumulatedDelta += e.deltaY;
-      clearTimeout(deltaResetTimer);
-      deltaResetTimer = setTimeout(() => {
-        accumulatedDelta = 0;
-      }, 180);
-
-      // 3. At the end of the feed, require an intentional deliberate upward scroll
-      // to avoid inertia recoil or trackpad bounce accidentally pulling up the last card
-      if (currentIndexRef.current >= videos.length) {
-        if (accumulatedDelta < -75) {
-          accumulatedDelta = 0;
-          pickPrevCard();
-        }
+      // If already animating or locked during settling cooldown, ignore further wheel events
+      if (isAnimating.current || gestureLocked.current) {
+        accumulatedDelta.current = 0;
         return;
       }
 
-      if (accumulatedDelta > 35) {
-        accumulatedDelta = 0;
-        dropNextCard();
-      } else if (accumulatedDelta < -35) {
-        accumulatedDelta = 0;
-        pickPrevCard();
+      accumulatedDelta.current += e.deltaY;
+      clearTimeout(deltaResetTimer.current);
+      deltaResetTimer.current = setTimeout(() => {
+        accumulatedDelta.current = 0;
+      }, 180);
+
+      // Intentional threshold: prevents slight twitches or trackpad drift from firing
+      const threshold = 75;
+      if (accumulatedDelta.current > threshold) {
+        const flickVelocity = Math.abs(accumulatedDelta.current);
+        accumulatedDelta.current = 0;
+        const flickSpeed = Math.min(2.2, Math.max(1.0, flickVelocity / 80));
+        const dynamicDuration = Math.max(0.38, 0.72 / flickSpeed);
+        dropNextCard(dynamicDuration);
+      } else if (accumulatedDelta.current < -threshold) {
+        const flickVelocity = Math.abs(accumulatedDelta.current);
+        accumulatedDelta.current = 0;
+        const flickSpeed = Math.min(2.2, Math.max(1.0, flickVelocity / 80));
+        const dynamicDuration = Math.max(0.38, 0.72 / flickSpeed);
+        pickPrevCard(dynamicDuration);
       }
     };
 
     stage.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       stage.removeEventListener("wheel", handleWheel);
-      clearTimeout(deltaResetTimer);
+      clearTimeout(deltaResetTimer.current);
+      clearTimeout(gestureUnlockTimer.current);
     };
-  }, [dropNextCard, pickPrevCard, videos.length]);
+  }, [dropNextCard, pickPrevCard]);
 
-  // Touch gesture for mobile / tablet
+  // Touch gesture with swipe velocity
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -867,15 +959,18 @@ export function StackedVideoCards({
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
-      if (isAnimating.current) return;
+      if (isAnimating.current || gestureLocked.current) return;
       const deltaY = touchStartY.current - e.changedTouches[0].clientY;
       const deltaTime = Date.now() - touchStartTime.current;
 
-      if (Math.abs(deltaY) > 30 && deltaTime < 600) {
+      if (Math.abs(deltaY) > 40 && deltaTime < 650) {
+        const flickSpeed = Math.min(2.2, Math.max(1.0, Math.abs(deltaY) / 100));
+        const dynamicDuration = Math.max(0.38, 0.72 / flickSpeed);
+
         if (deltaY > 0) {
-          dropNextCard();
+          dropNextCard(dynamicDuration);
         } else {
-          pickPrevCard();
+          pickPrevCard(dynamicDuration);
         }
       }
     };
@@ -888,13 +983,14 @@ export function StackedVideoCards({
     };
   }, [dropNextCard, pickPrevCard]);
 
-  // Keyboard navigation (Supports ArrowDown, ArrowUp, ArrowRight, ArrowLeft, Space, PageDown, PageUp)
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
-        isAnimating.current
+        isAnimating.current ||
+        gestureLocked.current
       ) {
         return;
       }
@@ -905,20 +1001,22 @@ export function StackedVideoCards({
         e.key === " "
       ) {
         e.preventDefault();
-        dropNextCard();
+        dropNextCard(0.65);
       } else if (
         e.key === "ArrowUp" ||
         e.key === "ArrowLeft" ||
         e.key === "PageUp"
       ) {
         e.preventDefault();
-        pickPrevCard();
+        pickPrevCard(0.65);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [dropNextCard, pickPrevCard]);
+
+  const N = displayVideos.length;
 
   return (
     <div
@@ -940,46 +1038,44 @@ export function StackedVideoCards({
           <div className="w-px h-10 sm:h-14 bg-linear-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10" />
         </div>
 
-        {/* Centered 3D 4:3 Cards Stack */}
+        {/* Centered 3D 16:9 Cards Stack */}
         <div
           style={{ transformStyle: "preserve-3d" }}
-          className="relative w-full max-w-181.25 sm:max-w-200 md:max-w-218.75 lg:max-w-231.25 aspect-4/3 max-h-[59vh] sm:max-h-[63vh] md:max-h-[67vh] flex items-center justify-center mt-6 sm:mt-8 translate-y-8 sm:translate-y-10">
-          {videos.map((video, index) => {
+          className="relative w-full max-w-[840px] sm:max-w-[960px] md:max-w-[1040px] lg:max-w-[1120px] aspect-video max-h-[70vh] flex items-center justify-center mt-6 sm:mt-8 translate-y-8 sm:translate-y-10">
+          {displayVideos.map((video, index) => {
             const dateInfo = parseCardDate(video.createdAt);
             const channelName = video.channel?.channelName || "Cinema";
+            const relIndex = (index - (currentIndex % N) + N) % N;
 
-            // Enforce maximum 6 playing videos: active window is [currentIndex, currentIndex + 6)
-            const isActivePlaying =
-              index >= currentIndex && index < currentIndex + 6;
-            const isFrontCard = index === currentIndex;
+            // Enforce maximum active playing video window (Slots 0..3)
+            const isActivePlaying = relIndex <= 3;
+            const isFrontCard = relIndex === 0;
 
-            // Only mount full video element for cards within active and near buffer
-            const shouldMountVideo =
-              index >= currentIndex - 1 && index <= currentIndex + 7;
+            // Only mount full video element for cards within active visible buffer
+            const shouldMountVideo = relIndex < maxStackSlots;
 
             const cardZIndex =
-              index < currentIndex
-                ? 0
-                : Math.max(1, 50 - (index - currentIndex));
+              relIndex < maxStackSlots ? Math.max(1, 50 - relIndex) : 0;
 
             return (
               <div
                 key={video.id}
                 ref={setCardRef(index)}
+                data-video-card-id={video.id}
                 style={{
                   zIndex: cardZIndex,
                   transformStyle: "preserve-3d",
-                  pointerEvents: index < currentIndex ? "none" : "auto",
+                  pointerEvents: relIndex < maxStackSlots ? "auto" : "none",
                 }}
                 onClick={() => {
-                  if (index > currentIndex) {
+                  if (relIndex > 0 && relIndex < maxStackSlots) {
                     dropNextCard();
                   } else if (isFrontCard) {
                     handleFrontCardClick(video);
                   }
                 }}
                 className={`absolute inset-0 rounded-lg sm:rounded-xl border border-black/10 dark:border-white/12 bg-white dark:bg-neutral-950 overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.15)] dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] will-change-transform flex flex-col ${
-                  index > currentIndex
+                  relIndex > 0 && relIndex < maxStackSlots
                     ? "cursor-pointer hover:border-black/25 dark:hover:border-white/30"
                     : "cursor-pointer"
                 }`}>
@@ -1037,53 +1133,6 @@ export function StackedVideoCards({
               </div>
             );
           })}
-
-          {/* =========================================================================
-              END-OF-FEED REVEAL SCREEN (Strictly protected z-index & visibility)
-              ========================================================================= */}
-          <div
-            ref={endOfFeedRef}
-            style={{
-              zIndex: currentIndex >= videos.length ? 40 : -1,
-              pointerEvents: currentIndex >= videos.length ? "auto" : "none",
-              visibility: currentIndex >= videos.length ? "visible" : "hidden",
-            }}
-            className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 select-text">
-            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-mono font-bold uppercase tracking-[0.25em] text-[#ff3c00] mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>VION WALLPAPER DISCOVERY</span>
-            </div>
-
-            <h2 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-neutral-900 dark:text-white uppercase mb-2">
-              YOU&apos;VE REACHED THE END.
-            </h2>
-
-            <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 max-w-md mx-auto mb-8 leading-relaxed font-light">
-              You&apos;ve seen every frame for now. Stay tuned as independent
-              creators publish new high-definition live wallpapers.
-            </p>
-
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={rewindToBeginning}
-                className="rounded-full text-xs font-semibold px-6 h-9 border-black/15 dark:border-white/20 bg-black/5 dark:bg-white/5 text-neutral-900 dark:text-white hover:bg-black/10 dark:hover:bg-white/15 gap-2 cursor-pointer">
-                <RotateCcw className="w-3.5 h-3.5" />
-                Rewind to Beginning
-              </Button>
-
-              {activeFeed === "subscriptions" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.push("/")}
-                  className="rounded-full text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white px-4 h-9 cursor-pointer">
-                  Explore All Wallpapers
-                </Button>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </div>

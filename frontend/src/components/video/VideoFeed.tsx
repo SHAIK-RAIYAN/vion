@@ -97,35 +97,6 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
     );
   }, [videos, searchQuery]);
 
-  // View mode transition animation (fluid morphing motion between stack and grid)
-  useGSAP(
-    () => {
-      if (!containerRef.current || prefersReducedMotion()) return;
-      const isGrid = viewMode === "grid";
-
-      gsap.fromTo(
-        containerRef.current,
-        {
-          opacity: 0.15,
-          scale: isGrid ? 0.95 : 1.04,
-          y: isGrid ? 25 : -20,
-        },
-        {
-          opacity: 1,
-          scale: 1,
-          y: 0,
-          duration: 0.48,
-          ease: "power3.out",
-          clearProps: "transform,opacity",
-        },
-      );
-    },
-    {
-      dependencies: [viewMode],
-      scope: containerRef,
-    },
-  );
-
   // 1. Unauthenticated Subscriptions Feed State
   if (activeFeed === "subscriptions" && !user) {
     return (
@@ -165,7 +136,7 @@ export function VideoFeed({ searchQuery = "", initialFeed }: VideoFeedProps) {
   if (loading) {
     return (
       <div className="w-full flex flex-col items-center justify-center min-h-[60vh] p-8">
-        <div className="relative w-full max-w-[580px] sm:max-w-[640px] md:max-w-[700px] lg:max-w-[740px] aspect-[4/3] max-h-[54vh] sm:max-h-[58vh] md:max-h-[60vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-6 sm:mt-8 shadow-2xl backdrop-blur-md">
+        <div className="relative w-full max-w-[840px] sm:max-w-[960px] md:max-w-[1040px] lg:max-w-[1120px] aspect-video max-h-[70vh] rounded-xl sm:rounded-2xl border border-black/10 dark:border-white/8 bg-white/70 dark:bg-neutral-950/60 overflow-hidden flex flex-col items-center justify-center mt-6 sm:mt-8 shadow-2xl backdrop-blur-md">
           <div className="w-full h-11 sm:h-12 bg-neutral-100/80 dark:bg-black/60 border-b border-black/5 dark:border-white/5 px-6 flex items-center justify-between animate-pulse">
             <div className="w-24 h-3 rounded bg-neutral-300 dark:bg-white/10" />
             <div className="w-48 h-3 rounded bg-neutral-300 dark:bg-white/10" />
