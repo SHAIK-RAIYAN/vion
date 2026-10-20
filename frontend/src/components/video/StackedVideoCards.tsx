@@ -1,5 +1,9 @@
 "use client";
 
+import { useGSAP } from "@gsap/react";
+import Hls from "hls.js";
+import { Play } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   memo,
   useCallback,
@@ -8,10 +12,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
-import { Play } from "lucide-react";
-import Hls from "hls.js";
-import { useGSAP } from "@gsap/react";
 
 import { useCurtainTransition } from "@/components/transitions/CurtainTransitionContext";
 import { useViewMode } from "@/context/ViewModeContext";
@@ -236,7 +236,7 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
       if (document.hidden || !isActive) {
         element.pause();
       } else {
-        element.play().catch(() => {});
+        element.play().catch(() => { });
       }
     };
 
@@ -250,16 +250,14 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         <img
           src={video.thumbnailUrl}
           alt={video.title}
-          className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${
-            isReady ? "opacity-0" : "opacity-100"
-          }`}
+          className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${isReady ? "opacity-0" : "opacity-100"
+            }`}
           loading={isFront ? "eager" : "lazy"}
         />
       ) : (
         <div
-          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-radial from-neutral-200 to-neutral-100 text-neutral-600 transition-opacity duration-500 dark:from-neutral-900 dark:to-black dark:text-neutral-500 ${
-            isReady ? "opacity-0" : "opacity-100"
-          }`}
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-radial from-neutral-200 to-neutral-100 text-neutral-600 transition-opacity duration-500 dark:from-neutral-900 dark:to-black dark:text-neutral-500 ${isReady ? "opacity-0" : "opacity-100"
+            }`}
         >
           <Play className="h-10 w-10 opacity-30 text-neutral-600 dark:text-white/40" />
           <span className="mt-2 font-mono text-[10px] uppercase tracking-widest text-neutral-600 dark:text-neutral-400 opacity-60">
@@ -281,9 +279,8 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
           onPlaying={() => setIsReady(true)}
           onLoadedData={() => setIsReady(true)}
           onError={() => setHasError(true)}
-          className={`h-full w-full object-cover transition-opacity duration-500 ${
-            isReady ? "opacity-100" : "opacity-0"
-          }`}
+          className={`h-full w-full object-cover transition-opacity duration-500 ${isReady ? "opacity-100" : "opacity-0"
+            }`}
         />
       )}
     </div>
@@ -863,7 +860,7 @@ export function StackedVideoCards({
 
         {/* Responsive Centered 3D 16:9 Cards Stack (wide 75-80% viewport desktop, capped at 1450px) */}
         <div
-          className="absolute left-1/2 top-[55%] w-[94vw] -translate-x-1/2 -translate-y-1/2 sm:top-[58%] sm:w-[min(90vw,1450px)]"
+          className="absolute left-1/2 top-[58%] w-[90vw] -translate-x-1/2 -translate-y-1/2 sm:top-[60%] sm:w-[min(80vw,1450px)]"
           style={{ height: "min(68vh, 56.25vw, 680px)", transformStyle: "preserve-3d" }}
         >
           {videos.map((video, index) => {
@@ -888,13 +885,12 @@ export function StackedVideoCards({
                     dropNextCard();
                   }
                 }}
-                className={`absolute inset-0 flex flex-col overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_24px_50px_-12px_rgba(0,0,0,0.12)] dark:border-white/15 dark:bg-neutral-950 dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] sm:rounded-lg ${
-                  visible
-                    ? isFront
-                      ? "cursor-pointer"
-                      : "cursor-pointer hover:border-black/30 dark:hover:border-white/30"
-                    : "pointer-events-none"
-                }`}
+                className={`absolute inset-0 flex flex-col overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_24px_50px_-12px_rgba(0,0,0,0.12)] dark:border-white/15 dark:bg-neutral-950 dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] sm:rounded-lg ${visible
+                  ? isFront
+                    ? "cursor-pointer"
+                    : "cursor-pointer hover:border-black/30 dark:hover:border-white/30"
+                  : "pointer-events-none"
+                  }`}
                 style={{
                   zIndex: visible ? 50 - slot : 0,
                   transformStyle: "preserve-3d",
