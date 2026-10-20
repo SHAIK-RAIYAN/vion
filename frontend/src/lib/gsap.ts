@@ -3,10 +3,14 @@
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { CustomEase } from "gsap/CustomEase";
 
 // Register core plugins once on client
 if (typeof window !== "undefined") {
-  gsap.registerPlugin(useGSAP, ScrollTrigger);
+  gsap.registerPlugin(useGSAP, ScrollTrigger, CustomEase);
+
+  // Register trademark Codegrid / Talha Slider cubic curve
+  CustomEase.create("cubic", "0.83, 0, 0.17, 1");
 
   // Set standard animation defaults aligned with modern UI design
   gsap.defaults({
@@ -15,7 +19,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-export { gsap, useGSAP, ScrollTrigger };
+export { gsap, useGSAP, ScrollTrigger, CustomEase };
 
 /**
  * Standard cubic-bezier and duration tokens

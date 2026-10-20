@@ -239,7 +239,7 @@ export function Header({
               className="w-36 bg-white/95 dark:bg-neutral-950/95 border-black/10 dark:border-white/10 backdrop-blur-xl p-1 text-neutral-900 dark:text-white shadow-2xl"
             >
               <DropdownMenuItem
-                onClick={() => setViewMode("stacked")}
+                onSelect={() => setViewMode("stacked")}
                 className={`flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer ${
                   viewMode === "stacked"
                     ? "bg-black/10 dark:bg-white/10 text-neutral-900 dark:text-white font-semibold"
@@ -255,7 +255,7 @@ export function Header({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setViewMode("grid")}
+                onSelect={() => setViewMode("grid")}
                 className={`flex items-center justify-between text-xs py-2 px-2.5 rounded-lg cursor-pointer ${
                   viewMode === "grid"
                     ? "bg-black/10 dark:bg-white/10 text-neutral-900 dark:text-white font-semibold"
