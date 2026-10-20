@@ -5,8 +5,8 @@ export default function Loading() {
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 select-none">
       <div className="relative flex items-center justify-center mb-4">
         {/* Pulsing subtle backdrop glow */}
-        <div className="absolute w-12 h-12 rounded-full bg-[var(--brand)]/20 animate-ping opacity-75 pointer-events-none" />
-        <div className="relative w-10 h-10 rounded-xl bg-[var(--brand)] flex items-center justify-center text-white font-black text-base shadow-lg animate-pulse">
+        <div className="absolute w-12 h-12 rounded-full bg-(--brand)/20 animate-ping opacity-75 pointer-events-none" />
+        <div className="relative w-10 h-10 rounded-xl bg-(--brand) flex items-center justify-center text-white font-black text-base shadow-lg animate-pulse">
           V
         </div>
       </div>

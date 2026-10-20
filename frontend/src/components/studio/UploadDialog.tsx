@@ -53,11 +53,89 @@ const ALLOWED_TYPES = [
   "video/x-matroska",
 ];
 
+export interface DetectedVideoMeta {
+  width: number;
+  height: number;
+  duration: number;
+  formattedResolution: string;
+  resolutionName: string;
+}
+
+function detectVideoMetadata(file: File): Promise<DetectedVideoMeta> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") {
+      resolve({
+        width: 1920,
+        height: 1080,
+        duration: 0,
+        formattedResolution: "1920 × 1080 (1080p)",
+        resolutionName: "1080p",
+      });
+      return;
+    }
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    const objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      video.remove();
+    };
+
+    video.onloadedmetadata = () => {
+      const width = video.videoWidth || 1920;
+      const height = video.videoHeight || 1080;
+      const duration = video.duration || 0;
+
+      const minDim = Math.min(width, height);
+      const maxDim = Math.max(width, height);
+      let resolutionName = "1080p";
+
+      if (maxDim >= 3840 || minDim >= 2160) {
+        resolutionName = "4K";
+      } else if (maxDim >= 2560 || minDim >= 1440) {
+        resolutionName = "1440p";
+      } else if (maxDim >= 1920 || minDim >= 1080) {
+        resolutionName = "1080p";
+      } else if (maxDim >= 1280 || minDim >= 720) {
+        resolutionName = "720p";
+      } else if (minDim >= 480) {
+        resolutionName = "480p";
+      } else {
+        resolutionName = `${minDim}p`;
+      }
+
+      const formattedResolution = `${width} × ${height} (${resolutionName})`;
+      cleanup();
+      resolve({
+        width,
+        height,
+        duration,
+        formattedResolution,
+        resolutionName,
+      });
+    };
+
+    video.onerror = () => {
+      cleanup();
+      resolve({
+        width: 1920,
+        height: 1080,
+        duration: 0,
+        formattedResolution: "1920 × 1080 (1080p)",
+        resolutionName: "1080p",
+      });
+    };
+  });
+}
+
 export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
   const { user } = useAuth();
 
   const [step, setStep] = useState<UploadStep>("SELECT_FILE");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [detectedMeta, setDetectedMeta] = useState<DetectedVideoMeta | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState<UploadVisibility>("PUBLIC");
@@ -182,6 +260,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
   const resetForm = () => {
     cleanup();
     setSelectedFile(null);
+    setDetectedMeta(null);
     setTitle("");
     setDescription("");
     setVisibility("PUBLIC");
@@ -229,8 +308,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     }
   };
 
-  // File selection validation
-  const handleFileChange = (file: File) => {
+  // File selection validation & metadata extraction
+  const handleFileChange = async (file: File) => {
     if (!ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(mp4|webm|mov|mkv)$/i)) {
       toast.error("Unsupported file type. Please choose an MP4, WebM, or MOV video file.");
       return;
@@ -245,6 +324,13 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
     setTitle(baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1));
     setStep("DETAILS");
+
+    try {
+      const meta = await detectVideoMetadata(file);
+      setDetectedMeta(meta);
+    } catch {
+      // Non-blocking fallback
+    }
   };
 
   // Start the direct-to-storage upload and finalization flow
@@ -324,13 +410,22 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
       setProcessingStatus("UPLOADING");
       setQueueState(null);
 
-      await api.uploads.finalize(currentUploadId, {
+      const finalizeRes = await api.uploads.finalize(currentUploadId, {
         storageKey: uploadSession.key,
+        resolution: detectedMeta?.resolutionName,
+        width: detectedMeta?.width,
+        height: detectedMeta?.height,
+        duration: detectedMeta?.duration,
       });
 
-      toast.success("Video uploaded to storage! Waiting for processing worker...");
+      if (finalizeRes.data?.status === "COMPLETED") {
+        setProcessingStatus("COMPLETED");
+        setStep("COMPLETED");
+        toast.success("Upload complete! Original video is ready for playback.");
+        return;
+      }
 
-      // 4. Poll processing status safely without request stacking
+      toast.success("Video uploaded to storage! Verifying status...");
       startPollingStatus(currentUploadId);
     } catch (err: any) {
       if (err.message !== "Upload cancelled by user.") {
@@ -348,8 +443,21 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     setErrorMessage(null);
 
     try {
-      await api.uploads.finalize(uploadId);
-      toast.info("Retrying video processing finalization...");
+      const finalizeRes = await api.uploads.finalize(uploadId, {
+        resolution: detectedMeta?.resolutionName,
+        width: detectedMeta?.width,
+        height: detectedMeta?.height,
+        duration: detectedMeta?.duration,
+      });
+
+      if (finalizeRes.data?.status === "COMPLETED") {
+        setProcessingStatus("COMPLETED");
+        setStep("COMPLETED");
+        toast.success("Upload complete! Original video is ready for playback.");
+        return;
+      }
+
+      toast.info("Retrying video verification...");
       startPollingStatus(uploadId);
     } catch (err: any) {
       setStep("ERROR");
@@ -537,7 +645,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                     {selectedFile?.name}
                   </p>
                   <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
-                    {((selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB • Ready to transfer
+                    {((selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB
+                    {detectedMeta ? ` • ${detectedMeta.formattedResolution}` : " • Ready to transfer"}
                   </p>
                 </div>
               </div>
@@ -686,7 +795,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                 </span>
               </div>
               <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
-                Direct Storage Transfer Active
+                Uploading video...
               </p>
               <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
                 {((uploadedBytes / (1024 * 1024)).toFixed(1))} MB of{" "}
@@ -715,84 +824,37 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
           </div>
         )}
 
-        {/* STEP 5: PROCESSING */}
+        {/* STEP 5: VERIFYING STORAGE */}
         {step === "PROCESSING" && (
           <div className="p-8 py-10 space-y-6 text-center">
-            {processingStatus === "TRANSCODING" || queueState?.state === "active" ? (
-              <>
-                <div className="relative flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center">
-                    <div className="w-14 h-14 rounded-full bg-[#ff3c00]/20 border border-[#ff3c00]/40 flex items-center justify-center text-[#ff3c00] shadow-[0_0_25px_rgba(255,60,0,0.3)]">
-                      <Loader2 className="w-7 h-7 animate-spin" />
-                    </div>
-                  </div>
+            <div className="relative flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center animate-pulse">
+                <div className="w-14 h-14 rounded-full bg-[#ff3c00]/20 border border-[#ff3c00]/30 flex items-center justify-center text-[#ff3c00] shadow-[0_0_25px_rgba(255,60,0,0.2)]">
+                  <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-[#ff3c00]/10 text-[#ff3c00] border border-[#ff3c00]/20">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>ADAPTIVE HLS ENCODING</span>
-                  </div>
-                  <h3 className="text-base font-bold text-neutral-900 dark:text-white pt-1">
-                    Generating Adaptive Streams
-                  </h3>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
-                    Worker is encoding 1080p, 720p, 480p, and 360p renditions with master playlists for fluid live playback.
-                  </p>
-                </div>
-
-                {/* Progress bar if numerical */}
-                {typeof queueState?.progress === "number" && queueState.progress > 0 && (
-                  <div className="w-full max-w-xs mx-auto space-y-1">
-                    <div className="flex justify-between text-[10px] font-mono text-neutral-400">
-                      <span>Transcoding</span>
-                      <span>{queueState.progress}%</span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
-                      <div
-                        className="h-full bg-[#ff3c00] transition-all duration-300"
-                        style={{ width: `${queueState.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="relative flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-amber-500/10 flex items-center justify-center animate-pulse">
-                    <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.2)]">
-                      <Clock className="w-6 h-6" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>QUEUED IN REDIS</span>
-                  </div>
-                  <h3 className="text-base font-bold text-neutral-900 dark:text-white pt-1">
-                    Upload Complete — Waiting for Worker
-                  </h3>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
-                    Your video file is safely deposited in storage. A background transcoding worker will automatically pick up the job.
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Rendition Preview Pills */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              {["1080p Full HD", "720p HD", "480p SD", "Thumbnails"].map((r) => (
-                <span
-                  key={r}
-                  className="px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-600 dark:text-neutral-400"
-                >
-                  {r}
-                </span>
-              ))}
+              </div>
             </div>
+
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-[#ff3c00]/10 text-[#ff3c00] border border-[#ff3c00]/20">
+                <Clock className="w-3.5 h-3.5" />
+                <span>STORAGE VERIFICATION</span>
+              </div>
+              <h3 className="text-base font-bold text-neutral-900 dark:text-white pt-1">
+                Verifying video deposit...
+              </h3>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
+                Verifying the uploaded video file in storage. Direct streaming at original quality will be enabled once verified.
+              </p>
+            </div>
+
+            {detectedMeta && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="px-3 py-1 rounded-full text-[11px] font-mono font-medium bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-700 dark:text-neutral-300">
+                  Detected Source: {detectedMeta.formattedResolution}
+                </span>
+              </div>
+            )}
 
             {uploadId && (
               <div className="pt-2">
@@ -822,13 +884,24 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>UPLOAD COMPLETE</span>
+              </div>
               <h3 className="text-lg font-bold text-neutral-900 dark:text-white">
-                Video Ready For Streaming!
+                Original Quality Available
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
-                Transcoding completed successfully. Multi-bitrate HLS adaptive manifest is now generated and active.
+                Your video is verified and ready for streaming at its source resolution. Optimized resolutions are not available yet.
               </p>
+            </div>
+
+            {/* Display Actual Source Resolution Pill */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <span className="px-3.5 py-1 rounded-full text-[11px] font-mono font-semibold bg-[#ff3c00]/10 border border-[#ff3c00]/25 text-[#ff3c00]">
+                {detectedMeta?.formattedResolution || "Original Source Quality"}
+              </span>
             </div>
 
             <div className="flex items-center justify-center gap-3 pt-2">

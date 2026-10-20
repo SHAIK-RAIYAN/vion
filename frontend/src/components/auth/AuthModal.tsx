@@ -187,7 +187,7 @@ export function AuthModal() {
         {/* Header */}
         <div className="mb-5">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-6 h-6 rounded-md bg-[var(--brand)] flex items-center justify-center text-white font-bold text-xs shadow-xs">
+            <div className="w-6 h-6 rounded-md bg-(--brand) flex items-center justify-center text-white font-bold text-xs shadow-xs">
               V
             </div>
             <h2 className="text-xl font-bold tracking-tight">Vion</h2>

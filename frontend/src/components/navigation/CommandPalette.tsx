@@ -125,7 +125,7 @@ export function CommandPalette() {
             {searchValue.trim() ? (
               <Command.Item
                 onSelect={handleSearchSubmit}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer bg-[var(--brand)]/10 text-[var(--brand)] font-semibold mb-1"
+                className="flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer bg-(--brand)/10 text-(--brand) font-semibold mb-1"
               >
                 <Search className="w-4 h-4" />
                 <span>Search Vion for &ldquo;{searchValue}&rdquo;</span>

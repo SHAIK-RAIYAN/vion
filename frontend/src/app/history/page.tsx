@@ -243,7 +243,7 @@ function HistoryContent() {
                 <div>
                   <CurtainLink
                     href={`/watch/${item.uploadId}`}
-                    className="font-semibold text-sm text-foreground hover:text-[var(--brand)] transition-colors line-clamp-2"
+                    className="font-semibold text-sm text-foreground hover:text-(--brand) transition-colors line-clamp-2"
                   >
                     {video.title}
                   </CurtainLink>

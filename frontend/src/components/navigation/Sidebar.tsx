@@ -137,7 +137,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   className={cn(
                     "w-4 h-4 shrink-0 transition-colors",
                     isActive
-                      ? "text-[var(--brand)]"
+                      ? "text-(--brand)"
                       : "text-muted-foreground group-hover:text-foreground",
                   )}
                 />

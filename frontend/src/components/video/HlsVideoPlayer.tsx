@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 interface HlsVideoPlayerProps {
   videoId: string;
   manifestUrl?: string | null;
+  directUrl?: string | null;
   thumbnailUrl?: string | null;
   title: string;
   isProcessing?: boolean;
@@ -42,6 +43,7 @@ interface QualityLevel {
 export function HlsVideoPlayer({
   videoId,
   manifestUrl,
+  directUrl,
   thumbnailUrl,
   title,
   isProcessing = false,
@@ -112,10 +114,15 @@ export function HlsVideoPlayer({
     [user, videoId],
   );
 
-  // Initialize HLS player
+  // Initialize HLS player or direct progressive stream
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !manifestUrl || isProcessing) {
+    if (!video || isProcessing) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (!manifestUrl && !directUrl) {
       setIsLoading(false);
       return;
     }
@@ -130,72 +137,110 @@ export function HlsVideoPlayer({
       hlsRef.current = null;
     }
 
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 90,
-      });
-      hlsRef.current = hls;
+    if (manifestUrl) {
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+          backBufferLength: 90,
+        });
+        hlsRef.current = hls;
 
-      hls.loadSource(manifestUrl);
-      hls.attachMedia(video);
+        hls.loadSource(manifestUrl);
+        hls.attachMedia(video);
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        setIsLoading(false);
-        const parsedLevels: QualityLevel[] = data.levels.map((lvl, index) => ({
-          index,
-          height: lvl.height,
-          bitrate: lvl.bitrate,
-          label: lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`,
-        }));
-        // Sort highest resolution first
-        setLevels(parsedLevels.sort((a, b) => b.height - a.height));
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          setIsLoading(false);
+          const parsedLevels: QualityLevel[] = data.levels.map((lvl, index) => ({
+            index,
+            height: lvl.height,
+            bitrate: lvl.bitrate,
+            label: lvl.height ? `${lvl.height}p` : `${Math.round(lvl.bitrate / 1000)}k`,
+          }));
+          // Sort highest resolution first
+          setLevels(parsedLevels.sort((a, b) => b.height - a.height));
 
-        // Restore initial progress if specified
-        if (initialProgressSeconds > 0) {
-          video.currentTime = initialProgressSeconds;
-        }
-      });
-
-      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-        setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level);
-      });
-
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              hls.recoverMediaError();
-              break;
-            default:
-              hls.destroy();
-              setHasError(true);
-              setErrorMessage("Failed to load video stream.");
-              break;
+          // Restore initial progress if specified
+          if (initialProgressSeconds > 0) {
+            video.currentTime = initialProgressSeconds;
           }
-        }
-      });
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native HLS for Safari / iOS
-      video.src = manifestUrl;
-      video.addEventListener("loadedmetadata", () => {
+        });
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          setCurrentLevel(hls.autoLevelEnabled ? -1 : data.level);
+        });
+
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                hls.destroy();
+                setHasError(true);
+                setErrorMessage("Failed to load video stream.");
+                break;
+            }
+          }
+        });
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        // Native HLS for Safari / iOS
+        video.src = manifestUrl;
+        video.addEventListener("loadedmetadata", () => {
+          setIsLoading(false);
+          if (initialProgressSeconds > 0) {
+            video.currentTime = initialProgressSeconds;
+          }
+        });
+        video.addEventListener("error", () => {
+          setHasError(true);
+          setErrorMessage("Playback error on native HLS.");
+        });
+      } else {
+        setHasError(true);
+        setErrorMessage("Your browser does not support HLS video playback.");
         setIsLoading(false);
+      }
+    } else if (directUrl) {
+      // Direct progressive playback for original video (transcoding deferred)
+      video.src = directUrl;
+
+      const handleLoadedMetadata = () => {
+        setIsLoading(false);
+        const sourceHeight = video.videoHeight || 1080;
+        const resLabel = availableResolutions?.[0] || `${sourceHeight}p`;
+        setLevels([
+          {
+            index: 0,
+            height: sourceHeight,
+            bitrate: 0,
+            label: `${resLabel} (Source)`,
+          },
+        ]);
+        setCurrentLevel(0);
+
         if (initialProgressSeconds > 0) {
           video.currentTime = initialProgressSeconds;
         }
-      });
-      video.addEventListener("error", () => {
+      };
+
+      const handleError = () => {
         setHasError(true);
-        setErrorMessage("Playback error on native HLS.");
-      });
-    } else {
-      setHasError(true);
-      setErrorMessage("Your browser does not support HLS video playback.");
-      setIsLoading(false);
+        setErrorMessage("Unable to load video stream directly.");
+        setIsLoading(false);
+      };
+
+      video.addEventListener("loadedmetadata", handleLoadedMetadata);
+      video.addEventListener("error", handleError);
+
+      return () => {
+        video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        video.removeEventListener("error", handleError);
+      };
     }
 
     return () => {
@@ -204,7 +249,7 @@ export function HlsVideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [manifestUrl, isProcessing, initialProgressSeconds]);
+  }, [manifestUrl, directUrl, isProcessing, initialProgressSeconds, availableResolutions]);
 
   // Video event listeners
   useEffect(() => {
@@ -426,15 +471,15 @@ export function HlsVideoPlayer({
         </div>
       )}
 
-      {/* NO MANIFEST / INACCESSIBLE STATE */}
-      {!isProcessing && !manifestUrl && !hasError && (
+      {/* NO MANIFEST / DIRECT STREAM STATE */}
+      {!isProcessing && !manifestUrl && !directUrl && !hasError && (
         <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center text-center p-6 space-y-3 z-30">
           <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
             <Play className="w-7 h-7 text-white" />
           </div>
           <p className="text-sm font-semibold text-white">Stream Unavailable</p>
           <p className="text-xs text-white/60 max-w-sm">
-            No HLS streaming manifest found for this media asset.
+            No video stream found for this media asset.
           </p>
         </div>
       )}
@@ -454,6 +499,9 @@ export function HlsVideoPlayer({
               if (hlsRef.current && manifestUrl) {
                 hlsRef.current.loadSource(manifestUrl);
                 hlsRef.current.startLoad();
+              } else if (videoRef.current && directUrl) {
+                videoRef.current.src = directUrl;
+                videoRef.current.load();
               }
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer transition-colors"
@@ -474,12 +522,12 @@ export function HlsVideoPlayer({
       )}
 
       {/* BIG CENTER PLAY BUTTON WHEN PAUSED */}
-      {!isPlaying && !isLoading && !isProcessing && !hasError && manifestUrl && (
+      {!isPlaying && !isLoading && !isProcessing && !hasError && (manifestUrl || directUrl) && (
         <div
           onClick={togglePlay}
           className="absolute inset-0 flex items-center justify-center cursor-pointer z-10 bg-black/20"
         >
-          <div className="w-16 h-16 rounded-full bg-[var(--brand)] text-white flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+          <div className="w-16 h-16 rounded-full bg-(--brand) text-white flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
             <Play className="w-8 h-8 fill-current ml-1" />
           </div>
         </div>
@@ -505,7 +553,7 @@ export function HlsVideoPlayer({
             />
             {/* Played progress */}
             <div
-              className="absolute left-0 top-0 bottom-0 bg-[var(--brand)] rounded-full"
+              className="absolute left-0 top-0 bottom-0 bg-(--brand) rounded-full"
               style={{
                 width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
               }}
@@ -561,7 +609,7 @@ export function HlsVideoPlayer({
                 step={0.05}
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-16 h-1 accent-[var(--brand)] opacity-0 group-hover/volume:opacity-100 transition-opacity cursor-pointer"
+                className="w-16 h-1 accent-(--brand) opacity-0 group-hover/volume:opacity-100 transition-opacity cursor-pointer"
               />
             </div>
 
@@ -598,7 +646,7 @@ export function HlsVideoPlayer({
                       className={cn(
                         "w-full text-left px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[11px]",
                         currentLevel === -1
-                          ? "bg-[var(--brand)]/10 text-[var(--brand)] font-bold"
+                          ? "bg-(--brand)/10 text-(--brand) font-bold"
                           : "hover:bg-muted text-foreground",
                       )}
                     >
@@ -612,7 +660,7 @@ export function HlsVideoPlayer({
                         className={cn(
                           "w-full text-left px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer text-[11px]",
                           currentLevel === lvl.index
-                            ? "bg-[var(--brand)]/10 text-[var(--brand)] font-bold"
+                            ? "bg-(--brand)/10 text-(--brand) font-bold"
                             : "hover:bg-muted text-foreground",
                         )}
                       >

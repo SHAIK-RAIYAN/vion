@@ -93,6 +93,21 @@ export function WatchContent({ id }: { id: string }) {
   const watchContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialVideo = useRef(Boolean(video));
 
+  // Dissolve incoming flying hero overlay cleanly into the live player
+  useEffect(() => {
+    const heroEl = document.getElementById("vion-hero-flying-element");
+    if (heroEl) {
+      gsap.to(heroEl, {
+        opacity: 0,
+        duration: 0.16,
+        ease: "power2.out",
+        onComplete: () => {
+          heroEl.remove();
+        },
+      });
+    }
+  }, []);
+
   // Smooth entrance animation for surrounding items while player remains stable
   useGSAP(
     () => {
@@ -407,6 +422,7 @@ export function WatchContent({ id }: { id: string }) {
             <HlsVideoPlayer
               videoId={video.id}
               manifestUrl={video.hlsManifestUrl}
+              directUrl={video.videos?.[0]?.url}
               thumbnailUrl={video.thumbnailUrl}
               title={video.title}
               isProcessing={isVideoProcessing}
@@ -458,7 +474,7 @@ export function WatchContent({ id }: { id: string }) {
                   <div>
                     <CurtainLink
                       href={`/channel/${video.channel.id}`}
-                      className="font-semibold text-sm text-foreground hover:text-[var(--brand)] transition-colors block"
+                      className="font-semibold text-sm text-foreground hover:text-(--brand) transition-colors block"
                     >
                       {video.channel.channelName}
                     </CurtainLink>
@@ -503,13 +519,13 @@ export function WatchContent({ id }: { id: string }) {
                   disabled={liking}
                   className={cn(
                     "text-xs font-semibold rounded-full gap-1.5 h-8 px-3.5 border-border",
-                    likeStatus?.liked && "text-[var(--brand)] border-[var(--brand)]/40 bg-[var(--brand)]/10",
+                    likeStatus?.liked && "text-(--brand) border-(--brand)/40 bg-(--brand)/10",
                   )}
                 >
                   <ThumbsUp
                     className={cn(
                       "w-3.5 h-3.5",
-                      likeStatus?.liked && "fill-current text-[var(--brand)]",
+                      likeStatus?.liked && "fill-current text-(--brand)",
                     )}
                   />
                   <span>{likeStatus?.likes ?? 0}</span>
@@ -548,7 +564,7 @@ export function WatchContent({ id }: { id: string }) {
                     title="Download video (Select resolution)"
                   >
                     {downloadingQuality ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--brand)]" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-(--brand)" />
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
@@ -583,7 +599,7 @@ export function WatchContent({ id }: { id: string }) {
           {/* REAL COMMENTS SECTION */}
           <div className="space-y-4 pt-4 border-t border-border">
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[var(--brand)]" />
+              <MessageSquare className="w-4 h-4 text-(--brand)" />
               <h2 className="text-base font-bold text-foreground">
                 Comments ({comments.length})
               </h2>

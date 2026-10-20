@@ -129,7 +129,7 @@ export default function SettingsPage() {
           {/* 1. Appearance Section */}
           <section className="bg-card border border-border rounded-2xl p-5 space-y-6 shadow-2xs">
             <div className="flex items-center gap-2.5 pb-3 border-b border-border">
-              <Palette className="w-4 h-4 text-[var(--brand)]" />
+              <Palette className="w-4 h-4 text-(--brand)" />
               <h2 className="text-base font-semibold text-foreground">
                 Appearance & Themes
               </h2>
@@ -194,7 +194,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-[var(--brand)] shrink-0 ml-2 relative z-10" />
+                        <Check className="w-4 h-4 text-(--brand) shrink-0 ml-2 relative z-10" />
                       )}
                     </button>
                   );
@@ -207,7 +207,7 @@ export default function SettingsPage() {
           <section className="bg-card border border-border rounded-2xl p-5 space-y-6 shadow-2xs">
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2.5">
-                <Shield className="w-4 h-4 text-[var(--brand)]" />
+                <Shield className="w-4 h-4 text-(--brand)" />
                 <h2 className="text-base font-semibold text-foreground">
                   Account Details
                 </h2>

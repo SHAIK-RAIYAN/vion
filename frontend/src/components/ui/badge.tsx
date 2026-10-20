@@ -11,7 +11,7 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
     secondary: "bg-secondary text-secondary-foreground",
     outline: "border border-border text-foreground",
     destructive: "bg-destructive text-destructive-foreground",
-    brand: "bg-[var(--brand)] text-white",
+    brand: "bg-(--brand) text-white",
   };
 
   return (

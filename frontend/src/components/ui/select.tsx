@@ -189,7 +189,7 @@ export function SelectItem({
       )}
     >
       <span className="truncate">{children}</span>
-      {isSelected && <Check className="h-3.5 w-3.5 text-[var(--brand)] shrink-0 ml-2" />}
+      {isSelected && <Check className="h-3.5 w-3.5 text-(--brand) shrink-0 ml-2" />}
     </button>
   );
 }

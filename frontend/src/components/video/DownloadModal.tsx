@@ -109,7 +109,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
       <DialogContent className="max-w-md w-[92vw] p-6 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/80 shadow-2xl">
         <DialogHeader className="space-y-1.5 text-left">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--brand)]/20 to-[var(--brand)]/5 border border-[var(--brand)]/30 flex items-center justify-center text-[var(--brand)]">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-(--brand)/20 to-(--brand)/5 border border-(--brand)/30 flex items-center justify-center text-(--brand)">
               <Download className="w-4 h-4" />
             </div>
             <div>
@@ -141,7 +141,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               {videoTitle || "Untitled Video"}
             </p>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-[var(--brand)]/15 text-[var(--brand)] font-bold">
+              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-(--brand)/15 text-(--brand) font-bold">
                 MP4 Video
               </span>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -181,7 +181,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                     className={cn(
                       "group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
                       isSelected
-                        ? "bg-[var(--brand)]/10 border-[var(--brand)] shadow-sm shadow-[var(--brand)]/10"
+                        ? "bg-(--brand)/10 border-(--brand) shadow-sm shadow-(--brand)/10"
                         : "bg-card hover:bg-muted/50 border-border hover:border-border/80",
                     )}
                   >
@@ -190,7 +190,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                         className={cn(
                           "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
                           isSelected
-                            ? "border-[var(--brand)] bg-[var(--brand)] text-[var(--brand-foreground,white)]"
+                            ? "border-(--brand) bg-(--brand) text-[var(--brand-foreground,white)]"
                             : "border-muted-foreground/40 group-hover:border-foreground/60",
                         )}
                       >
@@ -206,7 +206,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                             className={cn(
                               "text-[10px] font-medium px-1.5 py-0.2 rounded-full border",
                               isSelected
-                                ? "bg-[var(--brand)]/20 text-[var(--brand)] border-[var(--brand)]/30"
+                                ? "bg-(--brand)/20 text-(--brand) border-(--brand)/30"
                                 : "bg-muted text-muted-foreground border-transparent",
                             )}
                           >
@@ -231,7 +231,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                         className={cn(
                           "h-7 px-2.5 text-xs font-semibold rounded-lg gap-1 transition-all cursor-pointer",
                           isSelected
-                            ? "bg-[var(--brand)] text-white hover:bg-[var(--brand)]/90 shadow-sm"
+                            ? "bg-(--brand) text-white hover:bg-(--brand)/90 shadow-sm"
                             : "hover:bg-accent text-foreground",
                         )}
                       >
@@ -268,7 +268,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             size="sm"
             disabled={Boolean(downloadingQuality) || !selectedQuality || sortedRenditions.length === 0}
             onClick={() => handleStartDownload(selectedQuality)}
-            className="text-xs font-bold rounded-xl gap-1.5 px-4 h-9 bg-[var(--brand)] text-white hover:bg-[var(--brand)]/90 shadow-md shadow-[var(--brand)]/20 cursor-pointer transition-all"
+            className="text-xs font-bold rounded-xl gap-1.5 px-4 h-9 bg-(--brand) text-white hover:bg-(--brand)/90 shadow-md shadow-(--brand)/20 cursor-pointer transition-all"
           >
             {downloadingQuality ? (
               <>
