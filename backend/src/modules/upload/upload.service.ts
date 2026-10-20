@@ -8,11 +8,13 @@ import {
   presignedUrlSchema,
   remoteUrlSchema,
   addVideoResolutionSchema,
+  finalizeUploadSchema,
   type CreateUploadInput,
   type UpdateUploadInput,
   type PresignedUrlInput,
   type RemoteUrlInput,
   type AddVideoResolutionInput,
+  type FinalizeUploadInput,
 } from "./upload.schema";
 import * as storageService from "../../services/storageService";
 import {
@@ -320,10 +322,21 @@ export async function updateUpload(
 
 /**
  * 7. POST /api/v1/uploads/:uploadId/finalize
- * Verifies the stored file and its ownership, then enqueues background processing.
- * Idempotent: Repeated calls do not enqueue duplicate work.
+ * Verifies the stored file and its ownership, records source resolution,
+ * and marks upload completed for direct original playback without requiring a worker.
+ * Idempotent: Repeated calls do not duplicate records.
  */
-export async function finalizeUpload(uploadId: string, userId: string, storageKey?: string) {
+export async function finalizeUpload(
+  uploadId: string,
+  userId: string,
+  input?: FinalizeUploadInput | string,
+) {
+  // Support both object input or raw storageKey string for backward compatibility
+  const data =
+    typeof input === "string"
+      ? { storageKey: input }
+      : finalizeUploadSchema.parse(input || {});
+
   const upload = await Upload.where({ id: uploadId, isDeleted: false })
     .include("channel", (c) => c.select("id", "userId"))
     .first();
@@ -336,12 +349,14 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     throw new AppError("Unauthorized access to finalize this upload.", 403, "FORBIDDEN");
   }
 
-  // Idempotency check: Do not re-enqueue duplicate jobs if already processing or finished
+  // Idempotency check: Return immediately if already completed or transcoding
   if (upload.processingStatus === "COMPLETED") {
+    const existingVideo = await Video.where({ uploadId }).first();
     return {
       uploadId: upload.id,
       status: upload.processingStatus,
-      message: "Upload has already completed processing.",
+      resolution: existingVideo?.resolution || "1080p",
+      message: "Upload has already completed verification.",
       alreadyCompleted: true,
     };
   }
@@ -355,37 +370,9 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     };
   }
 
-  // Check BullMQ for active or waiting job to ensure idempotency across rapid duplicate calls
-  try {
-    const existingJob = await getTranscodeJobByUploadId(uploadId);
-    if (existingJob) {
-      const state = await existingJob.getState();
-      if (state === "waiting" || state === "active" || state === "delayed") {
-        return {
-          uploadId: upload.id,
-          status: upload.processingStatus,
-          jobId: existingJob.id,
-          message:
-            state === "active"
-              ? "Upload is actively being transcoded."
-              : "Upload is already queued for transcoding.",
-          alreadyProcessing: true,
-        };
-      }
-    }
-  } catch {
-    // Non-fatal if queue check fails
-  }
-
-  // If retrying a previously failed upload, reset processingStatus to UPLOADING
-  if (upload.processingStatus === "FAILED") {
-    await Upload.where({ id: uploadId }).update({ processingStatus: "UPLOADING" });
-    upload.processingStatus = "UPLOADING";
-  }
-
   // Enforce server-controlled storage path prefix
   const expectedFolder = `raw/${upload.channel.id}/${uploadId}`;
-  if (storageKey && !storageKey.startsWith(expectedFolder)) {
+  if (data.storageKey && !data.storageKey.startsWith(expectedFolder)) {
     throw new AppError(
       "Supplied storage key does not match this upload session.",
       403,
@@ -393,7 +380,7 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     );
   }
 
-  let verifiedStorageKey = storageKey || `${expectedFolder}/source_video.mp4`;
+  let verifiedStorageKey = data.storageKey || `${expectedFolder}/source_video.mp4`;
 
   // Verify object existence and size in Supabase Storage
   if (!isStorageConfigured()) {
@@ -433,22 +420,51 @@ export async function finalizeUpload(uploadId: string, userId: string, storageKe
     );
   }
 
-  // Note: Status remains UPLOADING while waiting in BullMQ queue.
-  // The worker process will transition state to TRANSCODING when it actively begins processing.
+  // Determine actual resolution from client metadata (validated) or fallback based on height
+  let resolutionLabel = "1080p";
+  if (data.resolution && typeof data.resolution === "string") {
+    resolutionLabel = data.resolution.trim();
+  } else if (data.height && typeof data.height === "number") {
+    const h = data.height;
+    if (h >= 2160) resolutionLabel = "4K";
+    else if (h >= 1440) resolutionLabel = "1440p";
+    else if (h >= 1080) resolutionLabel = "1080p";
+    else if (h >= 720) resolutionLabel = "720p";
+    else if (h >= 480) resolutionLabel = "480p";
+    else resolutionLabel = `${h}p`;
+  }
 
-  // Enqueue background transcoding job into BullMQ
-  const job = await enqueueTranscodeJob({
-    uploadId: upload.id,
-    channelId: upload.channel.id,
-    rawVideoKey: verifiedStorageKey,
-    title: upload.title,
+  // Record original resolution in Video table for direct playback and download
+  try {
+    const existingVideo = await Video.where({ uploadId }).first();
+    if (!existingVideo) {
+      await Video.create({
+        uploadId: upload.id,
+        resolution: resolutionLabel,
+        url: verifiedStorageKey,
+      });
+    } else {
+      await Video.where({ id: existingVideo.id }).update({
+        resolution: resolutionLabel,
+        url: verifiedStorageKey,
+      });
+    }
+  } catch (dbErr: any) {
+    console.warn(`[Upload Service] Notice recording Video rendition: ${dbErr.message}`);
+  }
+
+  // Mark upload COMPLETED directly — original video is verified and ready for streaming
+  await Upload.where({ id: uploadId }).update({
+    processingStatus: "COMPLETED",
   });
+  upload.processingStatus = "COMPLETED";
 
   return {
     uploadId: upload.id,
-    status: upload.processingStatus,
-    jobId: job ? job.id : null,
-    message: "Raw upload verified successfully and queued for transcoding.",
+    status: "COMPLETED",
+    resolution: resolutionLabel,
+    storageKey: verifiedStorageKey,
+    message: "Upload complete and verified. Original quality available for playback.",
   };
 }
 

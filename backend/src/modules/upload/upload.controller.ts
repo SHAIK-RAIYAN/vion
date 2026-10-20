@@ -117,7 +117,7 @@ const finalizeUpload = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Upload ID is required.", 400);
   }
 
-  const result = await uploadService.finalizeUpload(targetId, req.user.id, req.body?.storageKey);
+  const result = await uploadService.finalizeUpload(targetId, req.user.id, req.body);
   res.status(200).json({
     success: true,
     message: result.message,

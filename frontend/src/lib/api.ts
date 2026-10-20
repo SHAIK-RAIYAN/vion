@@ -389,7 +389,16 @@ export const api = {
       });
     },
 
-    finalize: async (uploadId: string, body?: { storageKey?: string }) => {
+    finalize: async (
+      uploadId: string,
+      body?: {
+        storageKey?: string;
+        resolution?: string;
+        width?: number;
+        height?: number;
+        duration?: number;
+      },
+    ) => {
       return request<{ message: string; data: any }>(`/uploads/${uploadId}/finalize`, {
         method: "POST",
         body: JSON.stringify(body || {}),

@@ -224,14 +224,14 @@ describe("Upload Module Safety & Validation", () => {
       }
     });
 
-    it("preserves UPLOADING status upon enqueuing and does not prematurely set TRANSCODING", async () => {
+    it("completes upload directly with source resolution and does not prematurely set TRANSCODING", async () => {
       const uploadingMock = {
         ...mockUpload,
         processingStatus: "UPLOADING",
       };
 
       const originalWhere = db.orm.public.Upload.where;
-      let updatedStatus: string | null = null;
+      let updatedStatus: any = null;
       (db.orm.public.Upload as any).where = () => ({
         include: () => ({
           first: async () => uploadingMock,
@@ -247,9 +247,14 @@ describe("Upload Module Safety & Validation", () => {
       ]);
 
       try {
-        const result = await uploadService.finalizeUpload("upl_123", "user_owner_1");
-        expect(result.status).toBe("UPLOADING");
-        expect(updatedStatus).toBeNull();
+        const result = await uploadService.finalizeUpload("upl_123", "user_owner_1", {
+          resolution: "1080p",
+          width: 1920,
+          height: 1080,
+        });
+        expect(result.status).toBe("COMPLETED");
+        expect(result.resolution).toBe("1080p");
+        expect(updatedStatus).toBe("COMPLETED");
       } finally {
         (db.orm.public.Upload as any).where = originalWhere;
         listSpy.mockRestore();

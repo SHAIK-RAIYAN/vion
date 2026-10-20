@@ -1,5 +1,7 @@
 import { db } from "../../prisma/db";
 import { getPaginationMeta, type Pagination } from "../../utils/pagination";
+import * as storageService from "../../services/storageService";
+import { STORAGE_RAW_BUCKET, isStorageConfigured } from "../../config/config";
 
 const { Upload, Subscription } = db.orm.public;
 
@@ -78,8 +80,34 @@ export async function getFeed(
       ? items[items.length - 1]!.id
       : null;
 
+  const resolvedItems = await Promise.all(
+    items.map(async (item) => {
+      const resolvedVideos = await Promise.all(
+        (item.videos || []).map(async (v) => {
+          let streamUrl = v.url;
+          if (!streamUrl.startsWith("http") || streamUrl.includes(`/${STORAGE_RAW_BUCKET}/`)) {
+            try {
+              const rawKey = streamUrl.startsWith("http")
+                ? streamUrl.split(`/${STORAGE_RAW_BUCKET}/`)[1]?.split("?")[0]
+                : streamUrl;
+              if (rawKey && isStorageConfigured()) {
+                streamUrl = await storageService.createSignedDownloadUrl(
+                  STORAGE_RAW_BUCKET,
+                  decodeURIComponent(rawKey),
+                  86400,
+                );
+              }
+            } catch {}
+          }
+          return { ...v, url: streamUrl };
+        })
+      );
+      return { ...item, videos: resolvedVideos };
+    })
+  );
+
   return {
-    items,
+    items: resolvedItems,
     nextCursor,
     pagination: getPaginationMeta(totalCount, page, limit),
   };

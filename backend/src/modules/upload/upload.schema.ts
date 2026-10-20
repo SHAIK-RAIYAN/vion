@@ -71,6 +71,10 @@ const updateUploadSchema = zod.object({
 
 const finalizeUploadSchema = zod.object({
   storageKey: zod.string().optional(),
+  resolution: zod.string().max(50).optional(),
+  width: zod.number().int().positive().optional(),
+  height: zod.number().int().positive().optional(),
+  duration: zod.number().positive().optional(),
 });
 
 const addVideoResolutionSchema = zod.object({

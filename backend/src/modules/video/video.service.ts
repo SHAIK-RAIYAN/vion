@@ -15,7 +15,7 @@ import {
 } from "./video.schema";
 import * as interactionService from "../interaction/interaction.service";
 
-const { Upload, Channel } = db.orm.public;
+const { Upload, Channel, Video } = db.orm.public;
 
 // In-memory sliding view cooldown cache: `${clientIdentifier}:${videoId}` -> timestamp
 const viewCooldownMap = new Map<string, number>();
@@ -61,20 +61,22 @@ export async function publishVideo(input: PublishVideoInput, userId: string) {
     throw new AppError("You do not own this upload.", 403, "FORBIDDEN");
   }
 
-  // Publication gate: an upload can only be published if HLS assets are ready
+  // Publication gate: an upload can be published if it is COMPLETED and has either HLS manifest or raw video renditions
   if (upload.processingStatus !== "COMPLETED") {
     throw new AppError(
-      `Cannot publish upload with status '${upload.processingStatus}'. Video transcoding must be COMPLETED before publication.`,
+      `Cannot publish upload with status '${upload.processingStatus}'. Video upload must be COMPLETED before publication.`,
       409,
       "PROCESSING_NOT_COMPLETED",
     );
   }
 
-  if (!upload.hlsManifestUrl) {
+  const videoRecords = await Video.where({ uploadId: data.uploadId }).all();
+  const hasPlayableSource = Boolean(upload.hlsManifestUrl) || (videoRecords && videoRecords.length > 0);
+  if (!hasPlayableSource) {
     throw new AppError(
-      "Cannot publish upload: HLS master manifest has not been generated.",
+      "Cannot publish upload: No playable video asset found.",
       409,
-      "MANIFEST_MISSING",
+      "MEDIA_NOT_FOUND",
     );
   }
 
@@ -127,10 +129,40 @@ export async function getVideoById(
     }
   }
 
-  const isReady = video.processingStatus === "COMPLETED" && Boolean(video.hlsManifestUrl);
+  const isReady =
+    video.processingStatus === "COMPLETED" &&
+    (Boolean(video.hlsManifestUrl) || (video.videos && video.videos.length > 0));
+
+  // Resolve signed URLs for direct playback of raw storage assets
+  const resolvedVideos = await Promise.all(
+    (video.videos || []).map(async (v) => {
+      let streamUrl = v.url;
+      if (!streamUrl.startsWith("http") || streamUrl.includes(`/${STORAGE_RAW_BUCKET}/`)) {
+        try {
+          const rawKey = streamUrl.startsWith("http")
+            ? streamUrl.split(`/${STORAGE_RAW_BUCKET}/`)[1]?.split("?")[0]
+            : streamUrl;
+          if (rawKey && isStorageConfigured()) {
+            streamUrl = await storageService.createSignedDownloadUrl(
+              STORAGE_RAW_BUCKET,
+              decodeURIComponent(rawKey),
+              86400, // 24-hour signed playback token
+            );
+          }
+        } catch {
+          // Keep existing URL if signing fails
+        }
+      }
+      return {
+        ...v,
+        url: streamUrl,
+      };
+    }),
+  );
 
   return {
     ...video,
+    videos: resolvedVideos,
     viewCount: updatedViewCount,
     isReady,
   };
@@ -202,7 +234,36 @@ export async function getPlayback(videoId: string, currentUserId?: string) {
     }
   }
 
-  const isReady = video.processingStatus === "COMPLETED" && Boolean(video.hlsManifestUrl);
+  const isReady =
+    video.processingStatus === "COMPLETED" &&
+    (Boolean(video.hlsManifestUrl) || (video.videos && video.videos.length > 0));
+
+  const resolvedRenditions = await Promise.all(
+    (video.videos || []).map(async (v) => {
+      let streamUrl = v.url;
+      if (!streamUrl.startsWith("http") || streamUrl.includes(`/${STORAGE_RAW_BUCKET}/`)) {
+        try {
+          const rawKey = streamUrl.startsWith("http")
+            ? streamUrl.split(`/${STORAGE_RAW_BUCKET}/`)[1]?.split("?")[0]
+            : streamUrl;
+          if (rawKey && isStorageConfigured()) {
+            streamUrl = await storageService.createSignedDownloadUrl(
+              STORAGE_RAW_BUCKET,
+              decodeURIComponent(rawKey),
+              86400,
+            );
+          }
+        } catch {
+          // Keep existing URL if signing fails
+        }
+      }
+      return {
+        id: v.id,
+        resolution: v.resolution,
+        url: streamUrl,
+      };
+    }),
+  );
 
   return {
     videoId: video.id,
@@ -215,11 +276,7 @@ export async function getPlayback(videoId: string, currentUserId?: string) {
     processingStatus: video.processingStatus,
     isReady,
     visibility: video.visibility,
-    renditions: (video.videos || []).map((v) => ({
-      id: v.id,
-      resolution: v.resolution,
-      url: v.url,
-    })),
+    renditions: resolvedRenditions,
     channel: video.channel
       ? {
           id: video.channel.id,
@@ -465,18 +522,31 @@ export async function getVideoDownload(
       }
     } else {
       // 2. Fallback to raw video in STORAGE_RAW_BUCKET if specific MP4 rendition is not present
-      const rawKey = await storageService.findRawVideoKey(video.channelId, video.id);
+      let rawKey = targetRendition.url?.startsWith("raw/")
+        ? targetRendition.url
+        : targetRendition.url?.includes(`/${STORAGE_RAW_BUCKET}/`)
+        ? targetRendition.url.split(`/${STORAGE_RAW_BUCKET}/`)[1]?.split("?")[0]
+        : null;
+
+      if (!rawKey) {
+        rawKey = await storageService.findRawVideoKey(video.channelId, video.id);
+      }
+
       if (rawKey) {
         try {
           downloadUrl = await storageService.createSignedDownloadUrl(
             STORAGE_RAW_BUCKET,
-            rawKey,
+            decodeURIComponent(rawKey),
             expiresInSeconds,
             { download: downloadFileName },
           );
         } catch {
-          downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
+          downloadUrl = targetRendition.url?.startsWith("http")
+            ? targetRendition.url
+            : storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
         }
+      } else if (targetRendition.url?.startsWith("http")) {
+        downloadUrl = targetRendition.url;
       } else {
         // 3. Fallback to public URL for rendition
         downloadUrl = storageService.getPublicUrl(STORAGE_PROCESSED_BUCKET, storageKey);
