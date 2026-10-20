@@ -41,8 +41,10 @@ const STACK_SLOTS = [
   { y: -270, z: -324, scale: 0.61, opacity: 0.6, brightness: 0.46, blur: 1.25 },
 ] as const;
 
-// Play video stream on front 4 visible cards; deeper cards display lightweight poster
-const PLAYBACK_SLOTS = 4;
+// Maximum number of visible cards in the 3D stack (front card + 3 stacked behind)
+const MAX_VISIBLE_CARDS = 4;
+// Play video stream on front visible cards
+const PLAYBACK_SLOTS = MAX_VISIBLE_CARDS;
 const EASE = "power3.inOut";
 const TRANSITION_DURATION = 0.82;
 
@@ -321,7 +323,7 @@ export function StackedVideoCards({
 
   const videoSignature = videos.map((video) => video.id).join("|");
   const videoCount = videos.length;
-  const visibleCount = Math.min(videoCount, STACK_SLOTS.length);
+  const visibleCount = Math.min(videoCount, MAX_VISIBLE_CARDS);
 
   // Stop Lenis while StackedVideoCards is active so it does not intercept or conflict with gestures
   useEffect(() => {
@@ -508,7 +510,7 @@ export function StackedVideoCards({
   const dropNextCard = useCallback(
     (requestedDuration = TRANSITION_DURATION) => {
       const total = videos.length;
-      const count = Math.min(total, STACK_SLOTS.length);
+      const count = Math.min(total, MAX_VISIBLE_CARDS);
       if (
         total < 2 ||
         count < 2 ||
@@ -616,7 +618,7 @@ export function StackedVideoCards({
   const pickPrevCard = useCallback(
     (requestedDuration = TRANSITION_DURATION) => {
       const total = videos.length;
-      const count = Math.min(total, STACK_SLOTS.length);
+      const count = Math.min(total, MAX_VISIBLE_CARDS);
       if (
         total < 2 ||
         count < 2 ||
