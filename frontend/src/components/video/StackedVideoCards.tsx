@@ -257,12 +257,12 @@ const CardVideoPlayer = memo(function CardVideoPlayer({
         />
       ) : (
         <div
-          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-radial from-neutral-900 to-black text-neutral-500 transition-opacity duration-500 ${
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-radial from-neutral-200 to-neutral-100 text-neutral-600 transition-opacity duration-500 dark:from-neutral-900 dark:to-black dark:text-neutral-500 ${
             isReady ? "opacity-0" : "opacity-100"
           }`}
         >
-          <Play className="h-10 w-10 opacity-30" />
-          <span className="mt-2 font-mono text-[10px] uppercase tracking-widest text-neutral-400 opacity-60">
+          <Play className="h-10 w-10 opacity-30 text-neutral-600 dark:text-white/40" />
+          <span className="mt-2 font-mono text-[10px] uppercase tracking-widest text-neutral-600 dark:text-neutral-400 opacity-60">
             Live Wallpaper
           </span>
         </div>
@@ -838,12 +838,12 @@ export function StackedVideoCards({
   return (
     <div
       ref={containerRef}
-      className="relative h-[calc(100svh-3.5rem)] min-h-[480px] w-full select-none overflow-hidden bg-[#0a0a0a] transition-colors duration-300 dark:bg-[#050505]"
+      className="relative h-[calc(100svh-3.5rem)] min-h-[480px] w-full select-none overflow-hidden bg-[#f8f9fa] dark:bg-[#050505] transition-colors duration-300"
     >
       {/* 3D Perspective Stage Container */}
       <div
         ref={stageRef}
-        className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#0a0a0a] px-3 transition-colors duration-300 dark:bg-[#050505] sm:px-6"
+        className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#f8f9fa] dark:bg-[#050505] px-3 transition-colors duration-300 sm:px-6"
         style={{
           perspective: "1350px",
           perspectiveOrigin: "50% 28%",
@@ -851,19 +851,19 @@ export function StackedVideoCards({
         }}
       >
         {/* Subtle Ambient Vignette */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.035)_0%,transparent_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(255,60,0,0.025)_0%,transparent_70%)]" />
 
         {/* Top Plumb Line With Anchor Pin */}
         <div className="decor-element pointer-events-none absolute left-1/2 top-3 z-0 flex -translate-x-1/2 flex-col items-center sm:top-4">
-          <div className="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-white/40 bg-black shadow-[0_0_8px_rgba(255,255,255,0.4)]">
-            <div className="h-1 w-1 rounded-full bg-white" />
+          <div className="flex h-2.5 w-2.5 items-center justify-center rounded-full border border-neutral-400 bg-white shadow-[0_0_8px_rgba(0,0,0,0.15)] dark:border-white/40 dark:bg-black dark:shadow-[0_0_8px_rgba(255,255,255,0.4)]">
+            <div className="h-1 w-1 rounded-full bg-neutral-900 dark:bg-white" />
           </div>
-          <div className="h-10 w-px bg-linear-to-b from-white/35 to-white/10 sm:h-14" />
+          <div className="h-10 w-px bg-linear-to-b from-neutral-400/50 to-neutral-400/10 dark:from-white/35 dark:to-white/10 sm:h-14" />
         </div>
 
         {/* Responsive Centered 3D 16:9 Cards Stack (wide 75-80% viewport desktop, capped at 1450px) */}
         <div
-          className="absolute left-1/2 top-[47%] w-[94vw] -translate-x-1/2 -translate-y-1/2 sm:top-[48%] sm:w-[min(90vw,1450px)]"
+          className="absolute left-1/2 top-[55%] w-[94vw] -translate-x-1/2 -translate-y-1/2 sm:top-[58%] sm:w-[min(90vw,1450px)]"
           style={{ height: "min(68vh, 56.25vw, 680px)", transformStyle: "preserve-3d" }}
         >
           {videos.map((video, index) => {
@@ -888,11 +888,11 @@ export function StackedVideoCards({
                     dropNextCard();
                   }
                 }}
-                className={`absolute inset-0 flex flex-col overflow-hidden rounded-md border border-white/12 bg-neutral-950 shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] sm:rounded-lg ${
+                className={`absolute inset-0 flex flex-col overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_24px_50px_-12px_rgba(0,0,0,0.12)] dark:border-white/15 dark:bg-neutral-950 dark:shadow-[0_28px_80px_-15px_rgba(0,0,0,0.95)] sm:rounded-lg ${
                   visible
                     ? isFront
                       ? "cursor-pointer"
-                      : "cursor-pointer hover:border-white/30"
+                      : "cursor-pointer hover:border-black/30 dark:hover:border-white/30"
                     : "pointer-events-none"
                 }`}
                 style={{
@@ -902,15 +902,15 @@ export function StackedVideoCards({
                   pointerEvents: visible ? "auto" : "none",
                 }}
               >
-                {/* 1. Black Metadata Header (Upload Date | Title | Channel) */}
-                <div className="z-20 flex h-8 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-black/95 px-3 text-[9px] sm:h-9 sm:px-5 sm:text-[11px]">
-                  <span className="max-w-[28%] shrink-0 truncate font-mono uppercase tracking-wide text-neutral-400">
+                {/* 1. Metadata Header (Upload Date | Title | Channel) */}
+                <div className="z-20 flex h-8 shrink-0 items-center justify-between gap-2 border-b border-black/6 bg-white/95 px-3 text-[9px] text-neutral-900 dark:border-white/10 dark:bg-black/95 dark:text-white sm:h-9 sm:px-5 sm:text-[11px]">
+                  <span className="max-w-[28%] shrink-0 truncate font-mono uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                     {date}
                   </span>
-                  <span className="min-w-0 flex-1 truncate px-2 text-center text-[10px] font-semibold tracking-wide text-white sm:text-xs">
+                  <span className="min-w-0 flex-1 truncate px-2 text-center text-[10px] font-semibold tracking-wide text-neutral-900 dark:text-white sm:text-xs">
                     {video.title}
                   </span>
-                  <span className="max-w-[30%] shrink-0 truncate text-right font-mono text-neutral-300">
+                  <span className="max-w-[30%] shrink-0 truncate text-right font-mono text-neutral-600 dark:text-neutral-300">
                     {channelName}
                   </span>
                 </div>
@@ -930,8 +930,8 @@ export function StackedVideoCards({
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/15" />
                   {isFront && (
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/60 shadow-2xl backdrop-blur-md">
-                        <Play className="ml-0.5 h-5 w-5 fill-white text-white" />
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-black/10 bg-white/70 shadow-2xl backdrop-blur-md dark:border-white/20 dark:bg-black/60">
+                        <Play className="ml-0.5 h-5 w-5 fill-neutral-900 text-neutral-900 dark:fill-white dark:text-white" />
                       </div>
                     </div>
                   )}
