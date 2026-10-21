@@ -12,7 +12,7 @@ import { CURTAIN_CONFIG, getCurtainRevealClipPath } from "./transitionConfig";
  * Persists in the root layout so it never unmounts or resets during navigation.
  */
 export function CurtainTransitionOverlay() {
-  const { setOverlayElement, isInitialLoad } = useCurtainTransition();
+  const { setOverlayElement, isInitialLoad, phase } = useCurtainTransition();
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,6 +23,14 @@ export function CurtainTransitionOverlay() {
       setOverlayElement(null);
     };
   }, [setOverlayElement]);
+
+  useEffect(() => {
+    if (!isInitialLoad && phase === "idle" && overlayRef.current) {
+      overlayRef.current.style.display = "none";
+    } else if (overlayRef.current) {
+      overlayRef.current.style.display = "block";
+    }
+  }, [isInitialLoad, phase]);
 
   // Initial SSR clip-path: full coverage on initial load, hidden once loaded
   const initialClipPath = isInitialLoad
@@ -38,6 +46,7 @@ export function CurtainTransitionOverlay() {
         backgroundColor: CURTAIN_CONFIG.color,
         clipPath: initialClipPath,
         WebkitClipPath: initialClipPath,
+        display: !isInitialLoad && phase === "idle" ? "none" : "block",
       }}
     />
   );

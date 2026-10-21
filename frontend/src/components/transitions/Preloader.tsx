@@ -111,6 +111,11 @@ export function Preloader() {
     }
   }, [reveal, setIsInitialLoad]);
 
+  const triggerExitSequenceRef = useRef(triggerExitSequence);
+  useEffect(() => {
+    triggerExitSequenceRef.current = triggerExitSequence;
+  }, [triggerExitSequence]);
+
   // Set up genuine application readiness detection
   useEffect(() => {
     if (!isInitialLoad) return;
@@ -129,17 +134,24 @@ export function Preloader() {
 
     let isCancelled = false;
 
-    // 1. Critical Fonts Loading
+    // 1. Critical Fonts Loading (with max 400ms timeout)
     const fontsPromise =
       typeof document !== "undefined" && document.fonts
-        ? document.fonts.ready.catch(() => {})
+        ? Promise.race([
+            document.fonts.ready.catch(() => {}),
+            new Promise((r) => setTimeout(r, 400)),
+          ])
         : Promise.resolve();
 
     // 2. Document Complete Readiness & Hydration
     const domReadyPromise = new Promise<void>((resolve) => {
-      if (typeof document !== "undefined" && document.readyState === "complete") {
+      if (
+        typeof document !== "undefined" &&
+        (document.readyState === "complete" || document.readyState === "interactive")
+      ) {
         resolve();
       } else if (typeof window !== "undefined") {
+        window.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
         window.addEventListener("load", () => resolve(), { once: true });
       } else {
         resolve();
@@ -148,13 +160,22 @@ export function Preloader() {
 
     // 3. Aesthetic rhythm beat for tumbling blocks
     const minBeatPromise = new Promise<void>((resolve) =>
-      setTimeout(resolve, CURTAIN_CONFIG.timings.minPreloaderBeat * 1000),
+      setTimeout(resolve, 500),
     );
 
     // 4. Safety timeout boundary so user is never trapped
     const safetyTimeoutPromise = new Promise<void>((resolve) =>
-      setTimeout(resolve, CURTAIN_CONFIG.timings.safetyTimeout * 1000),
+      setTimeout(resolve, 1000),
     );
+
+    // Dismiss on click/touch/keypress as safety
+    const onUserAction = () => {
+      if (!isCancelled) triggerExitSequenceRef.current();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("click", onUserAction, { once: true });
+      window.addEventListener("keydown", onUserAction, { once: true });
+    }
 
     // Initial critical application work: fonts + DOM hydration
     const criticalWork = Promise.all([fontsPromise, domReadyPromise]);
@@ -165,13 +186,17 @@ export function Preloader() {
     ]).then(() => {
       if (isCancelled) return;
       isReadyRef.current = true;
-      triggerExitSequence();
+      triggerExitSequenceRef.current();
     });
 
     return () => {
       isCancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("click", onUserAction);
+        window.removeEventListener("keydown", onUserAction);
+      }
     };
-  }, [isInitialLoad, reveal, setIsInitialLoad, triggerExitSequence]);
+  }, [isInitialLoad, reveal, setIsInitialLoad]);
 
   // Setup GSAP tumbling blocks animation loop
   useGSAP(

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/popover";
 import { UploadDialog } from "@/components/studio/UploadDialog";
 import { VionLogo } from "./VionLogo";
+import { SiteViewCounter } from "./SiteViewCounter";
 import {
   Search,
   Sun,
@@ -217,6 +218,9 @@ export function Header({
             RIGHT AREA: View Mode Dropdown + Upload + Settings + Account
             ========================================================================= */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Realtime Site View Counter */}
+          <SiteViewCounter />
+
           {/* Shadcn View Mode Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
