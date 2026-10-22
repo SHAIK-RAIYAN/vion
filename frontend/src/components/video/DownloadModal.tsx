@@ -45,25 +45,25 @@ const QUALITY_META: Record<
     label: "1080p Full HD",
     tag: "Best Quality",
     icon: <Sparkles className="w-4 h-4 text-amber-400" />,
-    desc: "Crisp 1080p high bitrate • Best for TV & Desktop",
+    desc: "1080p high bitrate • Best for Desktop & TV",
   },
   "720p": {
     label: "720p HD",
     tag: "Recommended",
     icon: <Monitor className="w-4 h-4 text-emerald-400" />,
-    desc: "Balanced high-definition • Great quality & file size",
+    desc: "720p balanced • High definition & small size",
   },
   "480p": {
     label: "480p SD",
     tag: "Standard",
     icon: <Film className="w-4 h-4 text-blue-400" />,
-    desc: "Standard definition • Smooth playback on laptops",
+    desc: "480p standard definition • Smooth playback",
   },
   "360p": {
     label: "360p Mobile",
     tag: "Data Saver",
     icon: <Smartphone className="w-4 h-4 text-purple-400" />,
-    desc: "Lightweight MP4 • Fastest download, minimal storage",
+    desc: "360p lightweight • Fastest download",
   },
 };
 
@@ -106,17 +106,17 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md w-[92vw] p-6 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/80 shadow-2xl">
+      <DialogContent className="max-w-md w-[94vw] sm:w-full p-4 sm:p-6 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/80 shadow-2xl overflow-hidden">
         <DialogHeader className="space-y-1.5 text-left">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-(--brand)/20 to-(--brand)/5 border border-(--brand)/30 flex items-center justify-center text-(--brand)">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-(--brand)/20 to-(--brand)/5 border border-(--brand)/30 flex items-center justify-center text-(--brand) shrink-0">
               <Download className="w-4 h-4" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-bold text-foreground tracking-tight">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-bold text-foreground tracking-tight truncate">
                 Download Video
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground truncate">
                 Select your preferred MP4 resolution to download
               </DialogDescription>
             </div>
@@ -124,7 +124,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         </DialogHeader>
 
         {/* Video Card Snippet */}
-        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40 border border-border/60">
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/40 border border-border/60 min-w-0 overflow-hidden">
           {thumbnailUrl ? (
             <img
               src={thumbnailUrl}
@@ -136,15 +136,15 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               <Film className="w-5 h-5 text-muted-foreground" />
             </div>
           )}
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-foreground truncate" title={videoTitle}>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="text-xs font-semibold text-foreground truncate block" title={videoTitle}>
               {videoTitle || "Untitled Video"}
             </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-(--brand)/15 text-(--brand) font-bold">
+            <div className="flex items-center gap-2 mt-1 min-w-0 flex-wrap">
+              <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-(--brand)/15 text-(--brand) font-bold shrink-0">
                 MP4 Video
               </span>
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1 shrink-0">
                 <HardDrive className="w-3 h-3" />
                 H.264 / AAC
               </span>
@@ -153,8 +153,8 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
         </div>
 
         {/* Resolution Options List */}
-        <div className="space-y-2 mt-1">
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+        <div className="space-y-2 mt-1 min-w-0">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5 block">
             Available Resolutions
           </label>
 
@@ -163,7 +163,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
               No downloadable renditions available for this video yet.
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-[42vh] overflow-y-auto pr-0.5">
+            <div className="space-y-1.5 max-h-[42vh] overflow-y-auto pr-0.5 min-w-0">
               {sortedRenditions.map((item) => {
                 const isSelected = selectedQuality === item.resolution;
                 const isCurrentlyDownloading = downloadingQuality === item.resolution;
@@ -179,13 +179,13 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                     key={item.id || item.resolution}
                     onClick={() => setSelectedQuality(item.resolution)}
                     className={cn(
-                      "group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer",
+                      "group relative flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer w-full min-w-0 overflow-hidden",
                       isSelected
                         ? "bg-(--brand)/10 border-(--brand) shadow-sm shadow-(--brand)/10"
                         : "bg-card hover:bg-muted/50 border-border hover:border-border/80",
                     )}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden pr-2">
                       <div
                         className={cn(
                           "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
@@ -197,14 +197,14 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                         {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-foreground">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs font-bold text-foreground truncate">
                             {meta.label}
                           </span>
                           <span
                             className={cn(
-                              "text-[10px] font-medium px-1.5 py-0.2 rounded-full border",
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full border shrink-0",
                               isSelected
                                 ? "bg-(--brand)/20 text-(--brand) border-(--brand)/30"
                                 : "bg-muted text-muted-foreground border-transparent",
@@ -213,13 +213,16 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                             {meta.tag}
                           </span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                        <p
+                          className="text-[11px] text-muted-foreground mt-0.5 truncate block"
+                          title={meta.desc}
+                        >
                           {meta.desc}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
                       <Button
                         size="sm"
                         variant={isSelected ? "default" : "ghost"}
@@ -229,7 +232,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                           handleStartDownload(item.resolution);
                         }}
                         className={cn(
-                          "h-7 px-2.5 text-xs font-semibold rounded-lg gap-1 transition-all cursor-pointer",
+                          "h-7 px-2.5 text-xs font-semibold rounded-lg gap-1 transition-all cursor-pointer shrink-0",
                           isSelected
                             ? "bg-(--brand) text-white hover:bg-(--brand)/90 shadow-sm"
                             : "hover:bg-accent text-foreground",

@@ -321,8 +321,9 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     }
 
     setSelectedFile(file);
-    const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-    setTitle(baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1));
+    const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
+    const formattedTitle = (baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1)).slice(0, 100);
+    setTitle(formattedTitle);
     setStep("DETAILS");
 
     try {
@@ -335,7 +336,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
   // Start the direct-to-storage upload and finalization flow
   const handleStartUpload = async () => {
-    if (!selectedFile || !title.trim()) {
+    const sanitizedTitle = title.trim().slice(0, 100);
+    if (!selectedFile || !sanitizedTitle) {
       toast.error("Please enter a video title.");
       return;
     }
@@ -349,7 +351,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
     try {
       // 1. Create upload session in backend
       const session = await api.uploads.create({
-        title: title.trim(),
+        title: sanitizedTitle,
         description: description.trim() || undefined,
         visibility,
         fileName: selectedFile.name,
@@ -467,30 +469,30 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-xl p-0 overflow-hidden border border-black/10 dark:border-white/10 bg-white dark:bg-[#0c0c0e] shadow-2xl rounded-3xl gap-0">
+      <DialogContent className="w-[94vw] sm:max-w-xl p-0 overflow-hidden border border-black/10 dark:border-white/10 bg-white dark:bg-[#0c0c0e] shadow-2xl rounded-3xl gap-0 max-h-[92vh] flex flex-col">
         {/* Top Accent Hairline */}
-        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#ff3c00] to-transparent opacity-90" />
+        <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-[#ff3c00] to-transparent opacity-90 shrink-0" />
 
         {/* Clean Header */}
-        <div className="p-6 pb-4 border-b border-black/6 dark:border-white/8 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3.5">
+        <div className="p-5 sm:p-6 pb-4 border-b border-black/6 dark:border-white/8 flex items-start justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
             <div className="w-10 h-10 rounded-2xl bg-[#ff3c00]/10 border border-[#ff3c00]/25 flex items-center justify-center text-[#ff3c00] shrink-0 shadow-[0_0_15px_rgba(255,60,0,0.15)]">
               <Video className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold tracking-widest text-[#ff3c00] uppercase">
+                <span className="text-[10px] font-mono font-bold tracking-widest text-[#ff3c00] uppercase shrink-0">
                   Vion Studio
                 </span>
-                <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700" />
-                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                <span className="w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700 shrink-0" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 shrink-0">
                   {step === "SELECT_FILE" && "Step 1/3"}
                   {step === "DETAILS" && "Step 2/3"}
                   {(step === "UPLOADING" || step === "PROCESSING") && "Step 3/3"}
                   {step === "COMPLETED" && "Done"}
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight mt-0.5">
+              <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white tracking-tight mt-0.5 truncate">
                 Video Upload
               </h2>
             </div>
@@ -633,18 +635,21 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 3: DETAILS */}
         {step === "DETAILS" && (
-          <div className="p-6 space-y-4">
+          <div className="p-5 sm:p-6 space-y-4 overflow-y-auto max-h-[calc(92vh-100px)] min-w-0">
             {/* Selected File Card */}
-            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/70 border border-black/8 dark:border-white/10 text-xs">
-              <div className="flex items-center gap-3 min-w-0 pr-2">
+            <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-neutral-100/80 dark:bg-neutral-900/70 border border-black/8 dark:border-white/10 text-xs min-w-0 w-full overflow-hidden">
+              <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden pr-3">
                 <div className="w-9 h-9 rounded-xl bg-[#ff3c00]/10 border border-[#ff3c00]/20 flex items-center justify-center text-[#ff3c00] shrink-0">
                   <FileVideo className="w-4.5 h-4.5" />
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-neutral-900 dark:text-white truncate">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p
+                    className="font-semibold text-neutral-900 dark:text-white truncate block"
+                    title={selectedFile?.name}
+                  >
                     {selectedFile?.name}
                   </p>
-                  <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400">
+                  <p className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 truncate">
                     {((selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB
                     {detectedMeta ? ` • ${detectedMeta.formattedResolution}` : " • Ready to transfer"}
                   </p>
@@ -661,12 +666,12 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
             </div>
 
             {/* Title Field */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
                   Video Title <span className="text-[#ff3c00]">*</span>
                 </label>
-                <span className="text-[10px] font-mono text-neutral-400">
+                <span className="text-[10px] font-mono text-neutral-400 shrink-0">
                   {title.length}/100
                 </span>
               </div>
@@ -675,8 +680,8 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                 placeholder="e.g. Celestial Orbit — 4K 60fps"
                 value={title}
                 maxLength={100}
-                onChange={(e) => setTitle(e.target.value)}
-                className="rounded-xl border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 text-xs text-neutral-900 dark:text-white focus:border-[#ff3c00] focus:ring-[#ff3c00]/20"
+                onChange={(e) => setTitle(e.target.value.slice(0, 100))}
+                className="w-full rounded-xl border-black/10 dark:border-white/10 bg-neutral-100/60 dark:bg-neutral-900/60 text-xs text-neutral-900 dark:text-white focus:border-[#ff3c00] focus:ring-[#ff3c00]/20"
                 required
               />
             </div>
@@ -778,7 +783,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 4: UPLOADING */}
         {step === "UPLOADING" && (
-          <div className="p-8 py-10 space-y-6 text-center">
+          <div className="p-6 sm:p-8 py-8 sm:py-10 space-y-6 text-center min-w-0 overflow-hidden">
             {/* Glowing Beacon */}
             <div className="relative flex items-center justify-center">
               <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center animate-pulse">
@@ -788,7 +793,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <div className="flex items-center justify-center gap-2">
                 <span className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-neutral-900 dark:text-white">
                   {uploadPercent}%
@@ -811,7 +816,24 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               />
             </div>
 
-            <div className="pt-2">
+            {/* Active Video Info Card */}
+            <div className="max-w-sm sm:max-w-md mx-auto p-3 rounded-2xl bg-neutral-100/70 dark:bg-neutral-900/50 border border-black/8 dark:border-white/10 text-left min-w-0 w-full overflow-hidden">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-[#ff3c00]/10 text-[#ff3c00] flex items-center justify-center shrink-0">
+                  <FileVideo className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate block" title={title || selectedFile?.name}>
+                    {title || selectedFile?.name}
+                  </p>
+                  <p className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate block" title={selectedFile?.name}>
+                    {selectedFile?.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -826,7 +848,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 5: VERIFYING STORAGE */}
         {step === "PROCESSING" && (
-          <div className="p-8 py-10 space-y-6 text-center">
+          <div className="p-6 sm:p-8 py-8 sm:py-10 space-y-6 text-center min-w-0 overflow-hidden">
             <div className="relative flex items-center justify-center">
               <div className="w-20 h-20 rounded-full bg-[#ff3c00]/10 flex items-center justify-center animate-pulse">
                 <div className="w-14 h-14 rounded-full bg-[#ff3c00]/20 border border-[#ff3c00]/30 flex items-center justify-center text-[#ff3c00] shadow-[0_0_25px_rgba(255,60,0,0.2)]">
@@ -835,7 +857,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-[#ff3c00]/10 text-[#ff3c00] border border-[#ff3c00]/20">
                 <Clock className="w-3.5 h-3.5" />
                 <span>STORAGE VERIFICATION</span>
@@ -848,16 +870,33 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </p>
             </div>
 
+            {/* Video preview pill */}
+            <div className="max-w-sm sm:max-w-md mx-auto p-3 rounded-2xl bg-neutral-100/70 dark:bg-neutral-900/50 border border-black/8 dark:border-white/10 text-left min-w-0 w-full overflow-hidden">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-[#ff3c00]/10 text-[#ff3c00] flex items-center justify-center shrink-0">
+                  <FileVideo className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate block" title={title || selectedFile?.name}>
+                    {title || selectedFile?.name}
+                  </p>
+                  <p className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate block">
+                    {detectedMeta?.formattedResolution || selectedFile?.name}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {detectedMeta && (
               <div className="flex items-center justify-center gap-2 pt-1">
-                <span className="px-3 py-1 rounded-full text-[11px] font-mono font-medium bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-700 dark:text-neutral-300">
-                  Detected Source: {detectedMeta.formattedResolution}
+                <span className="px-3 py-1 rounded-full text-[11px] font-mono font-medium bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-700 dark:text-neutral-300 truncate max-w-xs">
+                  Detected: {detectedMeta.formattedResolution}
                 </span>
               </div>
             )}
 
             {uploadId && (
-              <div className="pt-2">
+              <div className="pt-1">
                 <Link href={`/watch/${uploadId}`} onClick={onClose}>
                   <Button
                     variant="outline"
@@ -875,7 +914,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 6: COMPLETED */}
         {step === "COMPLETED" && (
-          <div className="p-8 py-10 space-y-6 text-center">
+          <div className="p-6 sm:p-8 py-8 sm:py-10 space-y-6 text-center min-w-0 overflow-hidden">
             <div className="relative flex items-center justify-center">
               <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
                 <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-500 shadow-[0_0_25px_rgba(16,185,129,0.3)]">
@@ -884,7 +923,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>UPLOAD COMPLETE</span>
@@ -893,18 +932,28 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                 Original Quality Available
               </h3>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed font-light">
-                Your video is verified and ready for streaming at its source resolution. Optimized resolutions are not available yet.
+                Your video is verified and ready for streaming at its source resolution.
               </p>
             </div>
 
-            {/* Display Actual Source Resolution Pill */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <span className="px-3.5 py-1 rounded-full text-[11px] font-mono font-semibold bg-[#ff3c00]/10 border border-[#ff3c00]/25 text-[#ff3c00]">
-                {detectedMeta?.formattedResolution || "Original Source Quality"}
-              </span>
+            {/* Completed Title Card */}
+            <div className="max-w-sm sm:max-w-md mx-auto p-3 rounded-2xl bg-neutral-100/70 dark:bg-neutral-900/50 border border-black/8 dark:border-white/10 text-left min-w-0 w-full overflow-hidden">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate block" title={title || selectedFile?.name}>
+                    {title || selectedFile?.name}
+                  </p>
+                  <p className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate block">
+                    {detectedMeta?.formattedResolution || "Original Source Quality"}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-3 pt-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -930,7 +979,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
 
         {/* STEP 7: ERROR */}
         {step === "ERROR" && (
-          <div className="p-8 py-10 space-y-6 text-center">
+          <div className="p-6 sm:p-8 py-8 sm:py-10 space-y-6 text-center min-w-0 overflow-hidden">
             <div className="relative flex items-center justify-center">
               <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center">
                 <div className="w-14 h-14 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center text-red-500 shadow-[0_0_25px_rgba(239,68,68,0.25)]">
@@ -939,11 +988,11 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">
                 Upload & Processing Notice
               </h3>
-              <p className="text-xs text-red-500 max-w-sm mx-auto leading-relaxed">
+              <p className="text-xs text-red-500 max-w-sm mx-auto leading-relaxed break-words px-2">
                 {errorMessage || "An unexpected error occurred during processing."}
               </p>
             </div>
