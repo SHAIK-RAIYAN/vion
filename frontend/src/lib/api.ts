@@ -79,6 +79,7 @@ async function request<T>(
       method,
       data: parsedBody,
       headers: options.headers as Record<string, string>,
+      signal: options.signal || undefined,
     });
     return res.data;
   }
@@ -104,6 +105,7 @@ async function request<T>(
         url,
         method: "GET",
         headers: options.headers as Record<string, string>,
+        signal: options.signal || undefined,
       });
 
       // Save in cache if TTL > 0
@@ -513,17 +515,22 @@ export const api = {
 
   // 8. SEARCH (/api/v1/search)
   search: {
-    query: async (query: string, page = 1, limit = 20) => {
+    query: async (
+      query: string,
+      page = 1,
+      limit = 20,
+      options?: { signal?: AbortSignal; bypassCache?: boolean },
+    ) => {
       return request<PaginatedResponse<Upload>>(
         `/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`,
-        { method: "GET" },
+        { method: "GET", signal: options?.signal, bypassCache: options?.bypassCache },
       );
     },
 
-    suggestions: async (query: string) => {
+    suggestions: async (query: string, options?: { signal?: AbortSignal }) => {
       return request<{ success: boolean; data: string[] }>(
         `/search/suggestions?q=${encodeURIComponent(query)}`,
-        { method: "GET" },
+        { method: "GET", signal: options?.signal },
       );
     },
   },

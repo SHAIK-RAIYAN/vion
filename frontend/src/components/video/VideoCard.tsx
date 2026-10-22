@@ -113,6 +113,20 @@ export function VideoCard({ video }: VideoCardProps) {
           </span>
         </div>
       </CurtainLink>
+
+      {/* Discovery & Match Reason Chips */}
+      {video.matchReasons && video.matchReasons.length > 0 && (
+        <div className="px-3 py-1.5 bg-neutral-50 dark:bg-neutral-900/60 border-t border-black/5 dark:border-white/5 flex flex-wrap gap-1 items-center">
+          {video.matchReasons.map((reason, idx) => (
+            <span
+              key={idx}
+              className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-black/5 dark:bg-white/10 text-neutral-700 dark:text-neutral-300 border border-black/5 dark:border-white/10 tracking-tight"
+            >
+              {reason}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

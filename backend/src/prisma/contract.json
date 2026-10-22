@@ -556,8 +556,22 @@
           },
           "Upload": {
             "fields": {
+              "category": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "channelId": {
                 "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "colorTone": {
+                "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
@@ -571,6 +585,13 @@
                 }
               },
               "description": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "environment": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -598,6 +619,13 @@
                   "kind": "scalar"
                 }
               },
+              "mood": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "processingStatus": {
                 "nullable": false,
                 "type": {
@@ -609,6 +637,13 @@
                   "entityName": "ProcessingStatus",
                   "namespaceId": "public",
                   "plane": "domain"
+                }
+              },
+              "tags": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
                 }
               },
               "thumbnailUrl": {
@@ -650,6 +685,13 @@
                   "entityName": "Visibility",
                   "namespaceId": "public",
                   "plane": "domain"
+                }
+              },
+              "visualStyle": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
                 }
               }
             },
@@ -732,14 +774,23 @@
             },
             "storage": {
               "fields": {
+                "category": {
+                  "column": "category"
+                },
                 "channelId": {
                   "column": "channelId"
+                },
+                "colorTone": {
+                  "column": "colorTone"
                 },
                 "createdAt": {
                   "column": "createdAt"
                 },
                 "description": {
                   "column": "description"
+                },
+                "environment": {
+                  "column": "environment"
                 },
                 "hlsManifestUrl": {
                   "column": "hlsManifestUrl"
@@ -750,8 +801,14 @@
                 "isDeleted": {
                   "column": "isDeleted"
                 },
+                "mood": {
+                  "column": "mood"
+                },
                 "processingStatus": {
                   "column": "processingStatus"
+                },
+                "tags": {
+                  "column": "tags"
                 },
                 "thumbnailUrl": {
                   "column": "thumbnailUrl"
@@ -767,6 +824,9 @@
                 },
                 "visibility": {
                   "column": "visibility"
+                },
+                "visualStyle": {
+                  "column": "visualStyle"
                 }
               },
               "namespaceId": "public",
@@ -1542,10 +1602,20 @@
                 }
               ],
               "columns": {
+                "category": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "channelId": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
                   "nullable": false
+                },
+                "colorTone": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
                 },
                 "createdAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -1557,6 +1627,11 @@
                   "nullable": false
                 },
                 "description": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
+                "environment": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
                   "nullable": true
@@ -1580,6 +1655,11 @@
                   "nativeType": "bool",
                   "nullable": false
                 },
+                "mood": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "processingStatus": {
                   "codecId": "pg/text@1",
                   "default": {
@@ -1594,6 +1674,11 @@
                     "namespaceId": "public",
                     "plane": "storage"
                   }
+                },
+                "tags": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
                 },
                 "thumbnailUrl": {
                   "codecId": "pg/text@1",
@@ -1633,6 +1718,11 @@
                     "namespaceId": "public",
                     "plane": "storage"
                   }
+                },
+                "visualStyle": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
                 }
               },
               "foreignKeys": [
@@ -1960,7 +2050,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a9c4a7928ff55004b6d79c14b0b800dac895895af347801a2924caf6307faa1a"
+    "storageHash": "7905ec5616f648fb21280507042b8b31b20eba300d2b28058b4ee8b3cf3cc04d"
   },
   "execution": {
     "executionHash": "8ecc855760700d1c8072f501ac91bcc8d778a1b576353f6d276ba67a3f74f7d8",

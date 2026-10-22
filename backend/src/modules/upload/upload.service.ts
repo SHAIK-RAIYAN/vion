@@ -72,6 +72,12 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
     thumbnailUrl: data.thumbnailUrl || null,
     visibility: data.visibility || "PRIVATE",
     processingStatus: "UPLOADING",
+    category: data.category || null,
+    mood: data.mood || null,
+    visualStyle: data.visualStyle || null,
+    colorTone: data.colorTone || null,
+    environment: data.environment || null,
+    tags: data.tags || null,
   });
 
   return {
@@ -315,6 +321,12 @@ export async function updateUpload(
     ...(data.description !== undefined ? { description: data.description || null } : {}),
     ...(data.thumbnailUrl !== undefined ? { thumbnailUrl: data.thumbnailUrl || null } : {}),
     ...(data.visibility ? { visibility: data.visibility } : {}),
+    ...(data.category !== undefined ? { category: data.category || null } : {}),
+    ...(data.mood !== undefined ? { mood: data.mood || null } : {}),
+    ...(data.visualStyle !== undefined ? { visualStyle: data.visualStyle || null } : {}),
+    ...(data.colorTone !== undefined ? { colorTone: data.colorTone || null } : {}),
+    ...(data.environment !== undefined ? { environment: data.environment || null } : {}),
+    ...(data.tags !== undefined ? { tags: data.tags || null } : {}),
   });
 
   return updated;

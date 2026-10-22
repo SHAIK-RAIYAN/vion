@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useRef } from "react";
-import { useGSAP } from "@gsap/react";
 import { gsap, prefersReducedMotion } from "@/lib/gsap";
+import { useGSAP } from "@gsap/react";
+import { useRef } from "react";
 
 interface VionLogoProps {
   className?: string;
@@ -100,48 +100,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
 
   return (
     <div className={`flex items-center gap-2 select-none text-neutral-900 dark:text-white ${className}`}>
-      {showMark && (
-        <svg
-          viewBox="0 0 512 512"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-5.5 w-5.5 sm:h-6 sm:w-6 shrink-0 transition-transform duration-300 group-hover:scale-105"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="vion-logo-mark-bg" x1="12%" y1="8%" x2="88%" y2="92%">
-              <stop offset="0%" stopColor="#FF5A00" />
-              <stop offset="38%" stopColor="#FF3C00" />
-              <stop offset="72%" stopColor="#9E1400" />
-              <stop offset="100%" stopColor="#120400" />
-            </linearGradient>
-            <linearGradient id="vion-logo-mark-rim" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FFA666" stopOpacity="0.9" />
-              <stop offset="45%" stopColor="#FF3C00" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#400A00" stopOpacity="0.8" />
-            </linearGradient>
-            <linearGradient id="vion-logo-mark-v-left" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FFFFFF" />
-              <stop offset="100%" stopColor="#F2F2F6" />
-            </linearGradient>
-            <linearGradient id="vion-logo-mark-v-right" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#F7F7FA" />
-              <stop offset="100%" stopColor="#DEDEE5" />
-            </linearGradient>
-            <filter id="vion-logo-mark-shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000000" floodOpacity="0.45" />
-            </filter>
-          </defs>
-          <circle cx="256" cy="256" r="236" fill="url(#vion-logo-mark-bg)" stroke="url(#vion-logo-mark-rim)" strokeWidth="14" />
-          <path d="M 40 256 A 216 216 0 0 1 472 256 A 216 170 0 0 0 40 256 Z" fill="#FFFFFF" fillOpacity="0.12" />
-          <g filter="url(#vion-logo-mark-shadow)">
-            <path d="M 132 144 L 256 368 L 256 264 L 186 144 Z" fill="url(#vion-logo-mark-v-left)" />
-            <path d="M 256 368 L 380 144 L 326 144 L 256 264 Z" fill="url(#vion-logo-mark-v-right)" />
-            <path d="M 256 264 L 256 368" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeOpacity="0.6" />
-            <circle cx="390" cy="352" r="24" fill="#FFFFFF" />
-          </g>
-        </svg>
-      )}
+
       <svg
         ref={svgRef}
         viewBox="0 0 116 24"
@@ -152,7 +111,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
       >
         <defs>
           <filter
-            id="vion-glow"
+
             filterUnits="userSpaceOnUse"
             x="-20"
             y="-20"
@@ -168,7 +127,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
             />
           </filter>
           <filter
-            id="vion-dot-glow"
+
             filterUnits="userSpaceOnUse"
             x="-20"
             y="-20"
@@ -193,7 +152,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          filter="url(#vion-glow)"
+
         />
 
         {/* I (drawn with two micro points to ensure non-zero bounding box across all renderers) */}
@@ -203,7 +162,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
           stroke="currentColor"
           strokeWidth="3.2"
           strokeLinecap="round"
-          filter="url(#vion-glow)"
+
         />
 
         {/* O */}
@@ -214,7 +173,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          filter="url(#vion-glow)"
+
         />
 
         {/* N */}
@@ -225,7 +184,7 @@ export function VionLogo({ className = "", showMark = true }: VionLogoProps) {
           strokeWidth="3.2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          filter="url(#vion-glow)"
+
         />
 
         {/* Dot Accent */}

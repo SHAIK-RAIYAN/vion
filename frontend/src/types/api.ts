@@ -62,6 +62,14 @@ export interface Upload {
   videos?: VideoRendition[];
   comments?: number;
   interactions?: number;
+  category?: string | null;
+  mood?: string | null;
+  visualStyle?: string | null;
+  colorTone?: string | null;
+  environment?: string | null;
+  tags?: string | null;
+  searchScore?: number;
+  matchReasons?: string[];
 }
 
 export interface PlaybackInfo {

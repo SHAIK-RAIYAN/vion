@@ -33,7 +33,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a9c4a7928ff55004b6d79c14b0b800dac895895af347801a2924caf6307faa1a'>;
+  StorageHashBase<'7905ec5616f648fb21280507042b8b31b20eba300d2b28058b4ee8b3cf3cc04d'>;
 export type ExecutionHash =
   ExecutionHashBase<'8ecc855760700d1c8072f501ac91bcc8d778a1b576353f6d276ba67a3f74f7d8'>;
 export type ProfileHash =
@@ -287,6 +287,12 @@ export type FieldOutputTypes = {
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly visibility: 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
       readonly processingStatus: 'PENDING' | 'UPLOADING' | 'TRANSCODING' | 'COMPLETED' | 'FAILED';
+      readonly category: CodecTypes['pg/text@1']['output'] | null;
+      readonly mood: CodecTypes['pg/text@1']['output'] | null;
+      readonly visualStyle: CodecTypes['pg/text@1']['output'] | null;
+      readonly colorTone: CodecTypes['pg/text@1']['output'] | null;
+      readonly environment: CodecTypes['pg/text@1']['output'] | null;
+      readonly tags: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly User: {
       readonly id: CodecTypes['pg/text@1']['output'];
@@ -363,6 +369,12 @@ export type FieldInputTypes = {
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly visibility: 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
       readonly processingStatus: 'PENDING' | 'UPLOADING' | 'TRANSCODING' | 'COMPLETED' | 'FAILED';
+      readonly category: CodecTypes['pg/text@1']['input'] | null;
+      readonly mood: CodecTypes['pg/text@1']['input'] | null;
+      readonly visualStyle: CodecTypes['pg/text@1']['input'] | null;
+      readonly colorTone: CodecTypes['pg/text@1']['input'] | null;
+      readonly environment: CodecTypes['pg/text@1']['input'] | null;
+      readonly tags: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly User: {
       readonly id: CodecTypes['pg/text@1']['input'];
@@ -427,18 +439,24 @@ export type StorageColumnTypes = {
       readonly subscriberId: CodecTypes['pg/text@1']['output'];
     };
     readonly upload: {
+      readonly category: CodecTypes['pg/text@1']['output'] | null;
       readonly channelId: CodecTypes['pg/text@1']['output'];
+      readonly colorTone: CodecTypes['pg/text@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly description: CodecTypes['pg/text@1']['output'] | null;
+      readonly environment: CodecTypes['pg/text@1']['output'] | null;
       readonly hlsManifestUrl: CodecTypes['pg/text@1']['output'] | null;
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly isDeleted: CodecTypes['pg/bool@1']['output'];
+      readonly mood: CodecTypes['pg/text@1']['output'] | null;
       readonly processingStatus: 'PENDING' | 'UPLOADING' | 'TRANSCODING' | 'COMPLETED' | 'FAILED';
+      readonly tags: CodecTypes['pg/text@1']['output'] | null;
       readonly thumbnailUrl: CodecTypes['pg/text@1']['output'] | null;
       readonly title: CodecTypes['pg/text@1']['output'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['output'];
       readonly viewCount: CodecTypes['pg/int4@1']['output'];
       readonly visibility: 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
+      readonly visualStyle: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly user: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['output'];
@@ -503,18 +521,24 @@ export type StorageColumnInputTypes = {
       readonly subscriberId: CodecTypes['pg/text@1']['input'];
     };
     readonly upload: {
+      readonly category: CodecTypes['pg/text@1']['input'] | null;
       readonly channelId: CodecTypes['pg/text@1']['input'];
+      readonly colorTone: CodecTypes['pg/text@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly description: CodecTypes['pg/text@1']['input'] | null;
+      readonly environment: CodecTypes['pg/text@1']['input'] | null;
       readonly hlsManifestUrl: CodecTypes['pg/text@1']['input'] | null;
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly isDeleted: CodecTypes['pg/bool@1']['input'];
+      readonly mood: CodecTypes['pg/text@1']['input'] | null;
       readonly processingStatus: 'PENDING' | 'UPLOADING' | 'TRANSCODING' | 'COMPLETED' | 'FAILED';
+      readonly tags: CodecTypes['pg/text@1']['input'] | null;
       readonly thumbnailUrl: CodecTypes['pg/text@1']['input'] | null;
       readonly title: CodecTypes['pg/text@1']['input'];
       readonly updatedAt: CodecTypes['pg/timestamptz-string@1']['input'];
       readonly viewCount: CodecTypes['pg/int4@1']['input'];
       readonly visibility: 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
+      readonly visualStyle: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly user: {
       readonly createdAt: CodecTypes['pg/timestamptz-string@1']['input'];
@@ -930,6 +954,36 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'pg/text@1', 'PENDING'>;
                   };
+                };
+                readonly category: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly mood: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly visualStyle: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly colorTone: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly environment: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly tags: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -1535,6 +1589,30 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
+              readonly category: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly mood: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly visualStyle: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly colorTone: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly environment: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly tags: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: {
               readonly channel: {
@@ -1609,6 +1687,12 @@ type ContractBase = Omit<
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly visibility: { readonly column: 'visibility' };
                 readonly processingStatus: { readonly column: 'processingStatus' };
+                readonly category: { readonly column: 'category' };
+                readonly mood: { readonly column: 'mood' };
+                readonly visualStyle: { readonly column: 'visualStyle' };
+                readonly colorTone: { readonly column: 'colorTone' };
+                readonly environment: { readonly column: 'environment' };
+                readonly tags: { readonly column: 'tags' };
               };
             };
           };

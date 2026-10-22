@@ -37,6 +37,12 @@ const createUploadSchema = zod.object({
     .max(MAX_UPLOAD_SIZE_BYTES, `File size exceeds the limit of ${Math.round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB`)
     .optional(),
   thumbnailUrl: zod.string().url().optional().or(zod.literal("")),
+  category: zod.string().max(100).optional(),
+  mood: zod.string().max(100).optional(),
+  visualStyle: zod.string().max(100).optional(),
+  colorTone: zod.string().max(100).optional(),
+  environment: zod.string().max(100).optional(),
+  tags: zod.string().max(500).optional(),
 });
 
 const presignedUrlSchema = zod.object({
@@ -67,6 +73,12 @@ const updateUploadSchema = zod.object({
   description: zod.string().max(5000).optional(),
   thumbnailUrl: zod.string().url().optional().or(zod.literal("")),
   visibility: visibilityEnum.optional(),
+  category: zod.string().max(100).optional().nullable(),
+  mood: zod.string().max(100).optional().nullable(),
+  visualStyle: zod.string().max(100).optional().nullable(),
+  colorTone: zod.string().max(100).optional().nullable(),
+  environment: zod.string().max(100).optional().nullable(),
+  tags: zod.string().max(500).optional().nullable(),
 });
 
 const finalizeUploadSchema = zod.object({

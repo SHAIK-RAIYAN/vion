@@ -68,6 +68,12 @@ model Upload {
   updatedAt temporal.updatedAtString()
   visibility       Visibility       @default(PRIVATE)
   processingStatus ProcessingStatus @default(PENDING)
+  category         String?
+  mood             String?
+  visualStyle      String?
+  colorTone        String?
+  environment      String?
+  tags             String?
 
   channel      Channel        @relation(fields: [channelId], references: [id])
   videos       Video[]
