@@ -30,7 +30,8 @@ const envSchema = z.object({
   FFMPEG_PATH: z.string().default("ffmpeg"),
   FFPROBE_PATH: z.string().default("ffprobe"),
   TEMP_MEDIA_DIR: z.string().default(path.resolve(process.cwd(), "tmp/media")),
-  MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(500 * 1024 * 1024), // 500 MB default
+  MAX_VIDEO_SIZE_BYTES: z.coerce.number().default(50 * 1024 * 1024), // 50 MB strict limit
+  MAX_UPLOAD_SIZE_BYTES: z.coerce.number().default(50 * 1024 * 1024), // 50 MB default
   MAX_PROCESSING_DURATION_SECONDS: z.coerce.number().default(1800), // 30 minutes default
 
   // Transcoding Performance & Worker Concurrency (Zero-budget constrained settings)
@@ -91,7 +92,8 @@ export const REDIS_URL = env.REDIS_URL || (NODE_ENV === "production" ? "" : "red
 export const FFMPEG_PATH = env.FFMPEG_PATH || "ffmpeg";
 export const FFPROBE_PATH = env.FFPROBE_PATH || "ffprobe";
 export const TEMP_MEDIA_DIR = path.resolve(env.TEMP_MEDIA_DIR || path.resolve(process.cwd(), "tmp/media"));
-export const MAX_UPLOAD_SIZE_BYTES = Number(env.MAX_UPLOAD_SIZE_BYTES) || 500 * 1024 * 1024;
+export const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB strict video limit
+export const MAX_UPLOAD_SIZE_BYTES = Number(env.MAX_VIDEO_SIZE_BYTES || env.MAX_UPLOAD_SIZE_BYTES) || MAX_VIDEO_SIZE_BYTES;
 export const MAX_PROCESSING_DURATION_SECONDS = Number(env.MAX_PROCESSING_DURATION_SECONDS) || 1800;
 
 // Worker Concurrency & Transcoding Optimizations

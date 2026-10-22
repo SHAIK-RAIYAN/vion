@@ -24,16 +24,25 @@ describe("Upload Module Safety & Validation", () => {
       }
     });
 
-    it("rejects oversized declared file sizes (> 500 MB)", () => {
+    it("rejects oversized declared file sizes (> 50 MB)", () => {
       const invalid = createUploadSchema.safeParse({
         title: "Too Large",
         contentType: "video/mp4",
-        fileSize: MAX_UPLOAD_SIZE_BYTES + 1024,
+        fileSize: MAX_UPLOAD_SIZE_BYTES + 1,
       });
       expect(invalid.success).toBe(false);
       if (!invalid.success) {
-        expect(invalid.error?.issues[0]?.message).toContain("exceeds the limit");
+        expect(invalid.error?.issues[0]?.message).toContain("Video must be 50 MB or smaller.");
       }
+    });
+
+    it("accepts video files exactly at the 50 MB boundary", () => {
+      const validBoundary = createUploadSchema.safeParse({
+        title: "Boundary Video",
+        contentType: "video/mp4",
+        fileSize: MAX_UPLOAD_SIZE_BYTES,
+      });
+      expect(validBoundary.success).toBe(true);
     });
 
     it("accepts valid video upload parameters", () => {

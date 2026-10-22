@@ -45,7 +45,8 @@ type UploadStep =
   | "COMPLETED"
   | "ERROR";
 
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB limit
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB limit
+const MAX_FILE_SIZE = MAX_VIDEO_SIZE_BYTES;
 const ALLOWED_TYPES = [
   "video/mp4",
   "video/webm",
@@ -312,18 +313,24 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
   const handleFileChange = async (file: File) => {
     if (!ALLOWED_TYPES.includes(file.type) && !file.name.match(/\.(mp4|webm|mov|mkv)$/i)) {
       toast.error("Unsupported file type. Please choose an MP4, WebM, or MOV video file.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error("Video file exceeds the 500 MB upload limit.");
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error("Video must be 50 MB or smaller.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
       return;
     }
 
     setSelectedFile(file);
     const baseTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ").trim();
     const formattedTitle = (baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1)).slice(0, 100);
-    setTitle(formattedTitle);
+    setTitle((prev) => (prev.trim() ? prev : formattedTitle));
     setStep("DETAILS");
 
     try {
@@ -342,6 +349,11 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
       return;
     }
 
+    if (selectedFile.size > MAX_VIDEO_SIZE_BYTES) {
+      toast.error("Video must be 50 MB or smaller.");
+      return;
+    }
+
     setStep("UPLOADING");
     setUploadPercent(0);
     setUploadedBytes(0);
@@ -356,6 +368,7 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
         visibility,
         fileName: selectedFile.name,
         contentType: selectedFile.type || "video/mp4",
+        fileSize: selectedFile.size,
       });
 
       const currentUploadId = session.data.uploadId;
@@ -614,13 +627,13 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
                   Click to select or drag and drop a video file
                 </p>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 font-light">
-                  Direct binary upload with adaptive HLS encoding on upload completion.
+                  Direct binary upload with adaptive HLS encoding. Maximum video size is 50 MB.
                 </p>
               </div>
 
               {/* Spec Pills */}
               <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
-                {["MP4", "WebM", "MOV", "Max 500 MB"].map((spec) => (
+                {["MP4", "WebM", "MOV", "Max 50 MB"].map((spec) => (
                   <span
                     key={spec}
                     className="px-2.5 py-1 rounded-md text-[10px] font-mono font-medium tracking-wide bg-neutral-100 dark:bg-neutral-900 border border-black/8 dark:border-white/10 text-neutral-600 dark:text-neutral-400"
@@ -760,23 +773,33 @@ export function UploadDialog({ isOpen, onClose }: UploadDialogProps) {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-black/6 dark:border-white/8">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClose}
-                className="rounded-full text-xs font-semibold px-4 h-9 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleStartUpload}
-                className="rounded-full text-xs font-semibold px-6 h-9 bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_20px_rgba(255,60,0,0.3)] transition-all active:scale-95 cursor-pointer gap-1.5"
-              >
-                <span>Start Upload</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
+            <div className="flex items-center justify-between pt-3 border-t border-black/6 dark:border-white/8">
+              {selectedFile && selectedFile.size > MAX_VIDEO_SIZE_BYTES ? (
+                <p className="text-xs text-red-500 font-medium">
+                  Video must be 50 MB or smaller.
+                </p>
+              ) : (
+                <div />
+              )}
+              <div className="flex items-center gap-2.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClose}
+                  className="rounded-full text-xs font-semibold px-4 h-9 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleStartUpload}
+                  disabled={!title.trim() || !selectedFile || selectedFile.size > MAX_VIDEO_SIZE_BYTES}
+                  className="rounded-full text-xs font-semibold px-6 h-9 bg-[#ff3c00] hover:bg-[#e03500] text-white shadow-[0_0_20px_rgba(255,60,0,0.3)] transition-all active:scale-95 cursor-pointer gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Start Upload</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
         )}

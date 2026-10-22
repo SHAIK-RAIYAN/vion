@@ -1,6 +1,6 @@
 import zod from "zod";
 import { paginationSchema } from "../../utils/pagination";
-import { MAX_UPLOAD_SIZE_BYTES } from "../../config/config";
+import { MAX_UPLOAD_SIZE_BYTES, MAX_VIDEO_SIZE_BYTES } from "../../config/config";
 
 export const ALLOWED_VIDEO_MIME_TYPES = [
   "video/mp4",
@@ -34,7 +34,7 @@ const createUploadSchema = zod.object({
   fileSize: zod
     .number()
     .positive("File size must be greater than 0")
-    .max(MAX_UPLOAD_SIZE_BYTES, `File size exceeds the limit of ${Math.round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB`)
+    .max(MAX_VIDEO_SIZE_BYTES, "Video must be 50 MB or smaller.")
     .optional(),
   thumbnailUrl: zod.string().url().optional().or(zod.literal("")),
   category: zod.string().max(100).optional(),
@@ -57,7 +57,7 @@ const presignedUrlSchema = zod.object({
   fileSize: zod
     .number()
     .positive("File size must be greater than 0")
-    .max(MAX_UPLOAD_SIZE_BYTES, `File size exceeds maximum permitted limit`)
+    .max(MAX_VIDEO_SIZE_BYTES, "Video must be 50 MB or smaller.")
     .optional(),
 });
 

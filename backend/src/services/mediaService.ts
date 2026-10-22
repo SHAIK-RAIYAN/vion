@@ -100,7 +100,7 @@ export async function readVideoInfo(filePath: string): Promise<VideoInfo> {
 
   if (stat.size > MAX_UPLOAD_SIZE_BYTES) {
     throw new AppError(
-      `Media file exceeds maximum size limit of ${Math.round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024))} MB.`,
+      "Video must be 50 MB or smaller.",
       413,
       "FILE_TOO_LARGE",
     );

@@ -21,6 +21,7 @@ import {
   isStorageConfigured,
   STORAGE_RAW_BUCKET,
   MAX_UPLOAD_SIZE_BYTES,
+  MAX_VIDEO_SIZE_BYTES,
 } from "../../config/config";
 import {
   enqueueTranscodeJob,
@@ -36,6 +37,10 @@ const { Upload, Channel, Video } = db.orm.public;
  */
 export async function createUpload(input: CreateUploadInput, userId: string) {
   const data = createUploadSchema.parse(input);
+
+  if (data.fileSize && data.fileSize > MAX_VIDEO_SIZE_BYTES) {
+    throw new AppError("Video must be 50 MB or smaller.", 413, "FILE_TOO_LARGE");
+  }
 
   const channel = await Channel.where({ userId }).first();
   if (!channel) {
@@ -95,7 +100,7 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
         "Content-Type": contentType,
       },
       expiresInSeconds: 3600,
-      maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
+      maxSizeBytes: MAX_VIDEO_SIZE_BYTES,
     },
   };
 }
@@ -106,6 +111,10 @@ export async function createUpload(input: CreateUploadInput, userId: string) {
  */
 export async function createPresignedUrl(input: PresignedUrlInput, userId: string) {
   const data = presignedUrlSchema.parse(input);
+
+  if (data.fileSize && data.fileSize > MAX_VIDEO_SIZE_BYTES) {
+    throw new AppError("Video must be 50 MB or smaller.", 413, "FILE_TOO_LARGE");
+  }
 
   const channel = await Channel.where({ userId }).first();
   if (!channel) {
@@ -178,7 +187,7 @@ export async function createPresignedUrl(input: PresignedUrlInput, userId: strin
       "Content-Type": data.contentType,
     },
     expiresInSeconds: 3600,
-    maxSizeBytes: MAX_UPLOAD_SIZE_BYTES,
+    maxSizeBytes: MAX_VIDEO_SIZE_BYTES,
   };
 }
 
@@ -421,12 +430,12 @@ export async function finalizeUpload(
   verifiedStorageKey = `${expectedFolder}/${mediaFile.name}`;
 
   const rawSizeBytes = (mediaFile as any).metadata?.size || 0;
-  if (rawSizeBytes > MAX_UPLOAD_SIZE_BYTES) {
+  if (rawSizeBytes > MAX_VIDEO_SIZE_BYTES) {
     // Enforce maximum size: clean up oversized object and mark failed
     await storageService.deleteFiles(STORAGE_RAW_BUCKET, [verifiedStorageKey]);
     await Upload.where({ id: uploadId }).update({ processingStatus: "FAILED" });
     throw new AppError(
-      `Uploaded video (${Math.round(rawSizeBytes / (1024 * 1024))} MB) exceeds maximum allowed limit.`,
+      "Video must be 50 MB or smaller.",
       413,
       "FILE_TOO_LARGE",
     );

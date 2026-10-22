@@ -341,6 +341,13 @@ export const api = {
       fileName?: string;
       contentType?: string;
       thumbnailUrl?: string;
+      fileSize?: number;
+      category?: string;
+      mood?: string;
+      visualStyle?: string;
+      colorTone?: string;
+      environment?: string;
+      tags?: string;
     }) => {
       return request<{
         message: string;

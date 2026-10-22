@@ -126,7 +126,17 @@ export async function ensureStorageBucketsExist(): Promise<void> {
     const existingNames = new Set((buckets || []).map((b) => b.name));
 
     if (!existingNames.has(STORAGE_RAW_BUCKET)) {
-      await client.storage.createBucket(STORAGE_RAW_BUCKET, { public: false });
+      await client.storage.createBucket(STORAGE_RAW_BUCKET, {
+        public: false,
+        fileSizeLimit: 50 * 1024 * 1024,
+        allowedMimeTypes: ["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"],
+      });
+    } else {
+      await client.storage.updateBucket(STORAGE_RAW_BUCKET, {
+        public: false,
+        fileSizeLimit: 50 * 1024 * 1024,
+        allowedMimeTypes: ["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"],
+      });
     }
     if (!existingNames.has(STORAGE_PROCESSED_BUCKET)) {
       await client.storage.createBucket(STORAGE_PROCESSED_BUCKET, { public: true });
