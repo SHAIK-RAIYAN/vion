@@ -45,8 +45,32 @@ const STACK_SLOTS = [
 const MAX_VISIBLE_CARDS = 4;
 // Play video stream on front visible cards
 const PLAYBACK_SLOTS = MAX_VISIBLE_CARDS;
-const EASE = "power3.inOut";
-const TRANSITION_DURATION = 0.82;
+
+// Velocity-based dynamic scroll acceleration constants
+const SLOW_DURATION = 0.76;        // Base duration for slow, deliberate scrolling
+const FAST_DURATION = 0.28;        // Duration during rapid continuous flick / spin
+const MIN_ALLOWED_DURATION = 0.24;  // Lower clamp to preserve visual depth integrity
+const MAX_PENDING_QUEUE = 4;       // Bounded queue prevents runaway trackpad inertia
+const BASE_SCROLL_THRESHOLD = 60;  // Pixels of normalized delta to commit 1 card step
+const WHEEL_WINDOW_MS = 220;       // Rolling window for velocity calculation
+
+function getTransitionEase(duration: number): string {
+  return duration < 0.44 ? "power2.inOut" : "power3.inOut";
+}
+
+function computeTransitionDuration(velocity: number, pendingCount: number): number {
+  if (prefersReducedMotion()) return 0.15;
+
+  // Normalized intensity based on velocity (0 - 2800+ px/s) and queue depth (1 - 4)
+  const normVelocity = Math.min(Math.max(velocity, 0), 2800) / 2800;
+  const normQueue = Math.min(Math.max(pendingCount - 1, 0), 3) / 3;
+
+  // Intensity increases with higher velocity or queued backlog
+  const intensity = Math.max(normVelocity * 0.92, normQueue * 0.88);
+
+  const duration = SLOW_DURATION - intensity * (SLOW_DURATION - FAST_DURATION);
+  return Math.max(MIN_ALLOWED_DURATION, Math.min(SLOW_DURATION, duration));
+}
 
 type Slot = (typeof STACK_SLOTS)[number];
 
@@ -311,14 +335,17 @@ export function StackedVideoCards({
   const currentIndexRef = useRef(0);
   const isAnimatingRef = useRef(false);
   const isNavigatingRef = useRef(false);
-  const gestureLockedRef = useRef(false);
+  const pendingIntentRef = useRef(0);
+  const wheelSamplesRef = useRef<Array<{ delta: number; time: number }>>([]);
+  const lastWheelTimeRef = useRef(0);
   const accumulatedDeltaRef = useRef(0);
   const deltaResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const failsafeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastLoadMoreLengthRef = useRef(-1);
   const touchStartYRef = useRef(0);
   const touchStartAtRef = useRef(0);
+  const touchRecentSamplesRef = useRef<Array<{ y: number; time: number }>>([]);
+  const processQueueRef = useRef<() => void>(() => {});
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const videoSignature = videos.map((video) => video.id).join("|");
@@ -378,7 +405,6 @@ export function StackedVideoCards({
       if (didInitializeRef.current) {
         syncStack(normalizedIndex);
         isAnimatingRef.current = false;
-        gestureLockedRef.current = false;
         return;
       }
 
@@ -388,12 +414,10 @@ export function StackedVideoCards({
       const intro = gsap.timeline({
         onComplete: () => {
           isAnimatingRef.current = false;
-          gestureLockedRef.current = false;
           clearSnapshot();
         },
         onInterrupt: () => {
           isAnimatingRef.current = false;
-          gestureLockedRef.current = false;
         },
       });
 
@@ -446,7 +470,7 @@ export function StackedVideoCards({
           {
             ...target,
             duration: reducedMotion ? 0 : 0.86,
-            ease: EASE,
+            ease: "power3.inOut",
             clearProps: "willChange",
           },
           delay,
@@ -456,14 +480,13 @@ export function StackedVideoCards({
       intro.fromTo(
         ".decor-element",
         { opacity: 0, y: -8 },
-        { opacity: 1, y: 0, duration: reducedMotion ? 0 : 0.65, ease: EASE },
+        { opacity: 1, y: 0, duration: reducedMotion ? 0 : 0.65, ease: "power3.inOut" },
         0.1,
       );
 
       if (reducedMotion) {
         intro.progress(1).kill();
         isAnimatingRef.current = false;
-        gestureLockedRef.current = false;
         clearSnapshot();
       } else {
         timelineRef.current = intro;
@@ -471,7 +494,6 @@ export function StackedVideoCards({
 
       return () => {
         isAnimatingRef.current = false;
-        gestureLockedRef.current = false;
       };
     },
     {
@@ -481,12 +503,14 @@ export function StackedVideoCards({
     },
   );
 
+  // =========================================================================
+  // CARD FINALIZE & STACK RE-SYNC
+  // =========================================================================
   const finishTransition = useCallback(
     (nextIndex: number, shouldLoadMore = false) => {
       currentIndexRef.current = nextIndex;
       setCurrentIndex(nextIndex);
       syncStack(nextIndex);
-      isAnimatingRef.current = false;
 
       if (failsafeTimerRef.current) clearTimeout(failsafeTimerRef.current);
 
@@ -494,11 +518,6 @@ export function StackedVideoCards({
         lastLoadMoreLengthRef.current = videoCount;
         onLoadMore();
       }
-
-      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
-      unlockTimerRef.current = setTimeout(() => {
-        gestureLockedRef.current = false;
-      }, 100);
     },
     [hasNextPage, onLoadMore, syncStack, videoCount],
   );
@@ -507,34 +526,26 @@ export function StackedVideoCards({
   // CARD DROP & CONVEYOR PROGRESSION (FORWARD / DOWN)
   // Front card plunges downward, middle cards step forward, new card rises into backSlot
   // =========================================================================
-  const dropNextCard = useCallback(
-    (requestedDuration = TRANSITION_DURATION) => {
+  const executeDropNext = useCallback(
+    (duration: number) => {
       const total = videos.length;
       const count = Math.min(total, MAX_VISIBLE_CARDS);
-      if (
-        total < 2 ||
-        count < 2 ||
-        isAnimatingRef.current ||
-        gestureLockedRef.current ||
-        isNavigatingRef.current
-      ) return;
+      if (total < 2 || count < 2 || isNavigatingRef.current) return;
 
       isAnimatingRef.current = true;
-      gestureLockedRef.current = true;
-      accumulatedDeltaRef.current = 0;
-      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
       timelineRef.current?.kill();
 
       // Failsafe watchdog to prevent lockouts
       if (failsafeTimerRef.current) clearTimeout(failsafeTimerRef.current);
       failsafeTimerRef.current = setTimeout(() => {
         isAnimatingRef.current = false;
-        gestureLockedRef.current = false;
-      }, 1200);
+        pendingIntentRef.current = 0;
+        syncStack(currentIndexRef.current);
+      }, 1400);
 
       const fromIndex = currentIndexRef.current % total;
       const nextIndex = (fromIndex + 1) % total;
-      const duration = prefersReducedMotion() ? 0.15 : requestedDuration;
+      const ease = getTransitionEase(duration);
       const activeCard = cardsRef.current[fromIndex];
       const hasNewBackCard = total > count;
       const birthIndex = hasNewBackCard ? (fromIndex + count) % total : fromIndex;
@@ -545,10 +556,16 @@ export function StackedVideoCards({
         onComplete: () => {
           if (activeCard && hasNewBackCard) gsap.set(activeCard, getHiddenVars());
           finishTransition(nextIndex, nextIndex >= total - 3);
+          isAnimatingRef.current = false;
+
+          // Process next queued intent if any remains
+          if (pendingIntentRef.current !== 0) {
+            processQueueRef.current();
+          }
         },
         onInterrupt: () => {
           isAnimatingRef.current = false;
-          gestureLockedRef.current = false;
+          pendingIntentRef.current = 0;
         },
       });
       timelineRef.current = timeline;
@@ -566,7 +583,7 @@ export function StackedVideoCards({
             zIndex: 100,
             pointerEvents: "none",
             duration: duration * (hasNewBackCard ? 1 : 0.58),
-            ease: EASE,
+            ease,
           },
           0,
         );
@@ -582,7 +599,7 @@ export function StackedVideoCards({
           {
             ...getSlotVars(step - 1, count),
             duration,
-            ease: EASE,
+            ease,
           },
           0,
         );
@@ -594,15 +611,15 @@ export function StackedVideoCards({
           gsap.set(birthCard, getEntryVars(backSlot, count));
           timeline.to(
             birthCard,
-            { ...getSlotVars(backSlot, count), duration: duration * 0.9, ease: EASE },
-            0.1,
+            { ...getSlotVars(backSlot, count), duration: duration * 0.9, ease },
+            duration * 0.1,
           );
         } else {
           // Wrap-around mode when total <= count: fallen front card resets and ascends to back
           timeline.set(birthCard, getEntryVars(backSlot, count), duration * 0.58);
           timeline.to(
             birthCard,
-            { ...getSlotVars(backSlot, count), duration: duration * 0.42, ease: EASE },
+            { ...getSlotVars(backSlot, count), duration: duration * 0.42, ease },
             duration * 0.58,
           );
         }
@@ -615,40 +632,41 @@ export function StackedVideoCards({
   // CARD PICK / REVERSE CONVEYOR PROGRESSION (BACKWARD / UP)
   // Previous card sweeps up into Slot 0, existing cards push backward into depth
   // =========================================================================
-  const pickPrevCard = useCallback(
-    (requestedDuration = TRANSITION_DURATION) => {
+  const executePickPrev = useCallback(
+    (duration: number) => {
       const total = videos.length;
       const count = Math.min(total, MAX_VISIBLE_CARDS);
-      if (
-        total < 2 ||
-        count < 2 ||
-        isAnimatingRef.current ||
-        gestureLockedRef.current ||
-        isNavigatingRef.current
-      ) return;
+      if (total < 2 || count < 2 || isNavigatingRef.current) return;
 
       isAnimatingRef.current = true;
-      gestureLockedRef.current = true;
-      accumulatedDeltaRef.current = 0;
-      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
       timelineRef.current?.kill();
 
       // Failsafe watchdog to prevent lockouts
       if (failsafeTimerRef.current) clearTimeout(failsafeTimerRef.current);
       failsafeTimerRef.current = setTimeout(() => {
         isAnimatingRef.current = false;
-        gestureLockedRef.current = false;
-      }, 1200);
+        pendingIntentRef.current = 0;
+        syncStack(currentIndexRef.current);
+      }, 1400);
 
       const fromIndex = currentIndexRef.current % total;
       const previousIndex = (fromIndex - 1 + total) % total;
-      const duration = prefersReducedMotion() ? 0.15 : requestedDuration;
+      const ease = getTransitionEase(duration);
       const previousCard = cardsRef.current[previousIndex];
+
       const timeline = gsap.timeline({
-        onComplete: () => finishTransition(previousIndex),
+        onComplete: () => {
+          finishTransition(previousIndex);
+          isAnimatingRef.current = false;
+
+          // Process next queued intent if any remains
+          if (pendingIntentRef.current !== 0) {
+            processQueueRef.current();
+          }
+        },
         onInterrupt: () => {
           isAnimatingRef.current = false;
-          gestureLockedRef.current = false;
+          pendingIntentRef.current = 0;
         },
       });
       timelineRef.current = timeline;
@@ -667,7 +685,7 @@ export function StackedVideoCards({
         });
         timeline.to(
           previousCard,
-          { ...getSlotVars(0, count), duration, ease: EASE },
+          { ...getSlotVars(0, count), duration, ease },
           0,
         );
       }
@@ -690,20 +708,91 @@ export function StackedVideoCards({
               opacity: 0,
               filter: "brightness(0.3) blur(3px)",
               duration: duration * 0.8,
-              ease: EASE,
+              ease,
             },
             0,
           );
         } else {
           timeline.to(
             card,
-            { ...getSlotVars(step + 1, count), duration, ease: EASE },
+            { ...getSlotVars(step + 1, count), duration, ease },
             0,
           );
         }
       }
     },
     [finishTransition, videos.length],
+  );
+
+  // =========================================================================
+  // QUEUE PROCESSOR: Sequentially processes accumulated scroll intent with dynamic duration
+  // =========================================================================
+  const processQueue = useCallback(() => {
+    if (isNavigatingRef.current) {
+      pendingIntentRef.current = 0;
+      return;
+    }
+
+    if (isAnimatingRef.current || pendingIntentRef.current === 0) return;
+
+    const direction = pendingIntentRef.current > 0 ? 1 : -1;
+    const queueDepth = Math.abs(pendingIntentRef.current);
+
+    // Consume 1 unit of intent
+    pendingIntentRef.current -= direction;
+
+    // Calculate current velocity from recent samples
+    const now = performance.now();
+    const cutoff = now - WHEEL_WINDOW_MS;
+    const recent = wheelSamplesRef.current.filter((s) => s.time > cutoff);
+    let deltaSum = 0;
+    for (const s of recent) deltaSum += Math.abs(s.delta);
+    const span = Math.max(30, now - (recent[0]?.time ?? now));
+    const currentVelocity = deltaSum / (span / 1000);
+
+    const duration = computeTransitionDuration(currentVelocity, queueDepth);
+
+    if (direction > 0) {
+      executeDropNext(duration);
+    } else {
+      executePickPrev(duration);
+    }
+  }, [executeDropNext, executePickPrev]);
+
+  useEffect(() => {
+    processQueueRef.current = processQueue;
+  }, [processQueue]);
+
+  const dropNextCard = useCallback(
+    (requestedDuration?: number) => {
+      if (isNavigatingRef.current || videos.length < 2) return;
+      if (requestedDuration) {
+        wheelSamplesRef.current.push({ delta: 200, time: performance.now() });
+      }
+      if (pendingIntentRef.current < MAX_PENDING_QUEUE) {
+        pendingIntentRef.current++;
+      }
+      if (!isAnimatingRef.current) {
+        processQueueRef.current();
+      }
+    },
+    [videos.length],
+  );
+
+  const pickPrevCard = useCallback(
+    (requestedDuration?: number) => {
+      if (isNavigatingRef.current || videos.length < 2) return;
+      if (requestedDuration) {
+        wheelSamplesRef.current.push({ delta: -200, time: performance.now() });
+      }
+      if (pendingIntentRef.current > -MAX_PENDING_QUEUE) {
+        pendingIntentRef.current--;
+      }
+      if (!isAnimatingRef.current) {
+        processQueueRef.current();
+      }
+    },
+    [videos.length],
   );
 
   // =========================================================================
@@ -715,6 +804,7 @@ export function StackedVideoCards({
       if (isAnimatingRef.current || isNavigatingRef.current) return;
       isNavigatingRef.current = true;
       isAnimatingRef.current = true;
+      pendingIntentRef.current = 0;
       skipNextTransition();
 
       const activeCard = cardsRef.current[currentIndexRef.current];
@@ -742,8 +832,7 @@ export function StackedVideoCards({
   );
 
   // =========================================================================
-  // WHEEL & TOUCH GESTURE HANDLING
-  // Deliberate threshold and lockout prevents accidental multi-advances from trackpad inertia
+  // WHEEL & TOUCH GESTURE HANDLING WITH SCROLL ACCELERATION & QUEUEING
   // =========================================================================
   useEffect(() => {
     const container = containerRef.current;
@@ -753,50 +842,131 @@ export function StackedVideoCards({
       if (event.ctrlKey || event.metaKey || videos.length < 2) return;
       event.preventDefault();
       event.stopPropagation();
-      if (isAnimatingRef.current || gestureLockedRef.current || isNavigatingRef.current) return;
+      if (isNavigatingRef.current) return;
 
-      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-      accumulatedDeltaRef.current += event.deltaY * unit;
+      const now = performance.now();
+      const unit = event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? window.innerHeight : 1;
+      const rawDelta = event.deltaY * unit;
+      if (Math.abs(rawDelta) < 0.5) return;
+
+      lastWheelTimeRef.current = now;
+
+      // Direction reversal handling: adjust or cancel pending intent if opposite scroll arrives
+      if (
+        (rawDelta > 0 && accumulatedDeltaRef.current < 0) ||
+        (rawDelta < 0 && accumulatedDeltaRef.current > 0)
+      ) {
+        accumulatedDeltaRef.current = 0;
+        if (rawDelta < 0 && pendingIntentRef.current > 0) {
+          pendingIntentRef.current = Math.max(0, pendingIntentRef.current - 1);
+        } else if (rawDelta > 0 && pendingIntentRef.current < 0) {
+          pendingIntentRef.current = Math.min(0, pendingIntentRef.current + 1);
+        }
+      }
+
+      // Record sample in rolling velocity window
+      const cutoff = now - WHEEL_WINDOW_MS;
+      wheelSamplesRef.current = wheelSamplesRef.current.filter((s) => s.time > cutoff);
+      wheelSamplesRef.current.push({ delta: rawDelta, time: now });
+
+      accumulatedDeltaRef.current += rawDelta;
+
       if (deltaResetTimerRef.current) clearTimeout(deltaResetTimerRef.current);
       deltaResetTimerRef.current = setTimeout(() => {
         accumulatedDeltaRef.current = 0;
+        wheelSamplesRef.current = [];
       }, 140);
 
-      if (accumulatedDeltaRef.current >= 45) {
-        accumulatedDeltaRef.current = 0;
-        dropNextCard();
-      } else if (accumulatedDeltaRef.current <= -45) {
-        accumulatedDeltaRef.current = 0;
-        pickPrevCard();
+      while (Math.abs(accumulatedDeltaRef.current) >= BASE_SCROLL_THRESHOLD) {
+        const dir = accumulatedDeltaRef.current > 0 ? 1 : -1;
+        accumulatedDeltaRef.current -= dir * BASE_SCROLL_THRESHOLD;
+
+        if (dir > 0) {
+          if (pendingIntentRef.current < 0) {
+            pendingIntentRef.current++;
+          } else if (pendingIntentRef.current < MAX_PENDING_QUEUE) {
+            pendingIntentRef.current++;
+          }
+        } else {
+          if (pendingIntentRef.current > 0) {
+            pendingIntentRef.current--;
+          } else if (pendingIntentRef.current > -MAX_PENDING_QUEUE) {
+            pendingIntentRef.current--;
+          }
+        }
+      }
+
+      if (!isAnimatingRef.current && pendingIntentRef.current !== 0) {
+        processQueueRef.current();
       }
     };
 
     const onTouchStart = (event: TouchEvent) => {
       touchStartYRef.current = event.touches[0]?.clientY ?? 0;
       touchStartAtRef.current = performance.now();
+      touchRecentSamplesRef.current = [{ y: touchStartYRef.current, time: touchStartAtRef.current }];
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY ?? 0;
+      const now = performance.now();
+      touchRecentSamplesRef.current.push({ y: currentY, time: now });
+      if (touchRecentSamplesRef.current.length > 5) {
+        touchRecentSamplesRef.current.shift();
+      }
     };
 
     const onTouchEnd = (event: TouchEvent) => {
-      if (isAnimatingRef.current || gestureLockedRef.current || isNavigatingRef.current) return;
+      if (isNavigatingRef.current || videos.length < 2) return;
       const endY = event.changedTouches[0]?.clientY ?? touchStartYRef.current;
-      const distance = touchStartYRef.current - endY;
-      const elapsed = performance.now() - touchStartAtRef.current;
-      if (Math.abs(distance) < 40 || elapsed > 700) return;
-      if (distance > 0) dropNextCard();
-      else pickPrevCard();
+      const totalDistance = touchStartYRef.current - endY;
+
+      if (Math.abs(totalDistance) < 35) return;
+
+      const firstSample = touchRecentSamplesRef.current[0] || {
+        y: touchStartYRef.current,
+        time: touchStartAtRef.current,
+      };
+      const recentDistance = firstSample.y - endY;
+      const recentElapsed = Math.max(10, performance.now() - firstSample.time);
+      const velocity = Math.abs(recentDistance) / (recentElapsed / 1000);
+
+      const dir = totalDistance > 0 ? 1 : -1;
+      const steps = velocity > 1800 ? 2 : 1;
+
+      const now = performance.now();
+      wheelSamplesRef.current = [{ delta: dir * velocity * 0.35, time: now }];
+
+      if (dir > 0) {
+        pendingIntentRef.current = Math.min(
+          MAX_PENDING_QUEUE,
+          Math.max(1, pendingIntentRef.current + steps),
+        );
+      } else {
+        pendingIntentRef.current = Math.max(
+          -MAX_PENDING_QUEUE,
+          Math.min(-1, pendingIntentRef.current - steps),
+        );
+      }
+
+      if (!isAnimatingRef.current) {
+        processQueueRef.current();
+      }
     };
 
     container.addEventListener("wheel", onWheel, { passive: false });
     container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", onTouchMove, { passive: true });
     container.addEventListener("touchend", onTouchEnd, { passive: true });
 
     return () => {
       container.removeEventListener("wheel", onWheel);
       container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
       container.removeEventListener("touchend", onTouchEnd);
       if (deltaResetTimerRef.current) clearTimeout(deltaResetTimerRef.current);
     };
-  }, [dropNextCard, pickPrevCard, videos.length]);
+  }, [videos.length]);
 
   // Keyboard navigation (Arrow keys, PageUp/Down, Space)
   useEffect(() => {
@@ -806,29 +976,40 @@ export function StackedVideoCards({
         target instanceof HTMLElement &&
         target.closest("input, textarea, select, button, a, [contenteditable='true']")
       ) return;
-      if (isAnimatingRef.current || gestureLockedRef.current || isNavigatingRef.current) return;
+      if (isNavigatingRef.current || videos.length < 2) return;
 
       if (["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key)) {
         event.preventDefault();
-        dropNextCard(0.68);
+        wheelSamplesRef.current.push({ delta: 140, time: performance.now() });
+        if (pendingIntentRef.current < MAX_PENDING_QUEUE) {
+          pendingIntentRef.current++;
+        }
+        if (!isAnimatingRef.current) {
+          processQueueRef.current();
+        }
       } else if (["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key)) {
         event.preventDefault();
-        pickPrevCard(0.68);
+        wheelSamplesRef.current.push({ delta: -140, time: performance.now() });
+        if (pendingIntentRef.current > -MAX_PENDING_QUEUE) {
+          pendingIntentRef.current--;
+        }
+        if (!isAnimatingRef.current) {
+          processQueueRef.current();
+        }
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dropNextCard, pickPrevCard]);
+  }, [videos.length]);
 
   // Teardown GSAP tweens and timers on unmount
   useEffect(() => {
     return () => {
       isAnimatingRef.current = false;
-      gestureLockedRef.current = false;
+      pendingIntentRef.current = 0;
       timelineRef.current?.kill();
       if (deltaResetTimerRef.current) clearTimeout(deltaResetTimerRef.current);
-      if (unlockTimerRef.current) clearTimeout(unlockTimerRef.current);
       if (failsafeTimerRef.current) clearTimeout(failsafeTimerRef.current);
       gsap.killTweensOf(cardsRef.current.filter(Boolean));
     };
@@ -880,8 +1061,9 @@ export function StackedVideoCards({
                 data-video-card-id={video.id}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!visible || isAnimatingRef.current || isNavigatingRef.current) return;
+                  if (!visible || isNavigatingRef.current) return;
                   if (isFront) {
+                    if (isAnimatingRef.current) return;
                     handleFrontCardClick(video);
                   } else {
                     dropNextCard();
